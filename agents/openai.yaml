@@ -1,0 +1,4 @@
+interface:
+  display_name: "向僵尸开炮日常"
+  short_description: "低 token 固定直点领取免费红点奖励并完成快速巡逻日常"
+  default_prompt: "使用 $zombie-fire-daily 以低 token 固定直点方式完成向僵尸开炮的免费每日奖励领取和快速巡逻。"
