@@ -8,13 +8,14 @@ game window, and stop safely when an ad layout is not the calibrated one.
 
 ## Scope
 
-- Make `system-events` the first backend considered by `auto`, because its
-  AppleScript result exposes Accessibility failures to the helper.
-- Keep `cgclick` as an explicit fallback only. Persist its compiled helper at a
+- Make `system-events` the only backend selected by `auto`, because its
+  AppleScript result exposes Accessibility failures to the helper. Give that
+  dispatch up to 8 seconds to complete before failing closed.
+- Keep `cgclick` as an explicit backend only. Persist its compiled helper at a
   stable, repository-local ignored path rather than using a new temporary
   executable identity per run.
-- Add an injectable backend order so isolated tests can prove both the default
-  order and fallback behaviour without emitting mouse events.
+- Add an injectable backend resolver so isolated tests can prove the default
+  fail-closed policy without emitting mouse events.
 - Split patrol ad closing into the calibrated top-right close attempt and a
   fail-closed error when it does not return the game to the expected window.
   The lower close coordinate remains available as an explicit, separately
@@ -34,11 +35,13 @@ game window, and stop safely when an ad layout is not the calibrated one.
 ### Backend dispatch
 
 `perform_click()` receives a backend order from a small resolver. With
-`--backend auto`, it tries `system-events` first, then `cgclick`, Quartz, and
-`cliclick`. An explicitly selected backend keeps its current fail-closed
-behaviour. Each backend still reports a successful process/API call rather
-than a game-state result; the patrol flow therefore retains its window guard
-and clearly labels its final output as attempted.
+`--backend auto`, that order contains only `system-events`; a failure or an
+8-second timeout stops the command and is reported to the caller. `cgclick`,
+Quartz, and `cliclick` remain explicit selections only, so an Accessibility
+failure cannot be silently replaced by a CoreGraphics event whose delivery is
+not observable. Each backend still reports a successful process/API call
+rather than a game-state result; the patrol flow therefore retains its window
+guard and clearly labels its final output as attempted.
 
 The compiled CoreGraphics helper is cached at an ignored stable path beneath
 the skill directory. This avoids a fresh temporary executable identity on
@@ -58,14 +61,15 @@ lower coordinate blindly.
 
 Commands with `--mock-bounds` plus `--dry-run` are non-operating and never
 call the focus helper. Tests cover the focus classification, auto backend
-order and fallback, stable helper-cache path construction, ad reward-delay
-placement, and mock dry-run dispatch. All tests use patches/mocks only.
+policy, stable helper-cache path construction, ad reward-delay placement, and
+mock dry-run dispatch. All tests use patches/mocks only.
 
 ## Acceptance criteria
 
-1. `auto` tries `system-events` before `cgclick`; a `system-events` failure
-   can fall through to `cgclick`.
-2. An `auto` run no longer creates a fresh `zombie-cgclick-*` directory.
+1. `auto` uses only `system-events`; its 8-second timeout or any dispatch
+   failure stops the command without a fallback click.
+2. An explicit `--backend cgclick` run no longer creates a fresh
+   `zombie-cgclick-*` directory.
 3. A lower/unknown ad close layout stops the patrol flow before any lower-area
    click is issued.
 4. `--mock-bounds 2,33,508,949 patrol-full-from-home --dry-run` succeeds

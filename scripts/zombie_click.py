@@ -15,9 +15,9 @@ import random
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
 
@@ -29,11 +29,18 @@ ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
 POST_CLICK_WAIT_MIN = 2.5
 POST_CLICK_WAIT_MAX = 3.5
+# System Events can briefly stall while macOS switches application focus. Keep
+# this finite so a failed Accessibility dispatch stops the automation safely.
+SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS = 8.0
 CLICK_BACKENDS = ("auto", "cgclick", "quartz", "cliclick", "system-events")
 NON_OPERATING_COMMANDS = frozenset({"list", "state", "self-test", "dry-run"})
 WECHAT_NAMES = {"微信", "WeChat", "Weixin", "WeApp", "小程序"}
 WECHAT_BUNDLE_HINTS = ("com.tencent.xin", "com.tencent.wechat", "com.tencent.flue")
 CGCLICK_BIN: str | None = None
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+CGCLICK_CACHE_DIR = SKILL_ROOT / ".generated"
+CGCLICK_BIN_PATH = CGCLICK_CACHE_DIR / "zombie_cgclick"
+CGCLICK_SOURCE_PATH = CGCLICK_CACHE_DIR / "zombie_cgclick.c"
 CGCLICK_SOURCE = r"""
 #include <ApplicationServices/ApplicationServices.h>
 #include <stdlib.h>
@@ -360,6 +367,17 @@ def ensure_unchanged_game_window(expected: Bounds) -> None:
         )
 
 
+def ensure_game_ready_after_ad(expected: Bounds) -> None:
+    """Stop safely unless the closed ad returned to the calibrated game."""
+    try:
+        ensure_unchanged_game_window(expected)
+    except ClickError as exc:
+        raise ClickError(
+            "patrol ad did not return to the calibrated game window; "
+            "stop without trying ad_close_lower"
+        ) from exc
+
+
 def scale_point(action: Action, bounds: Bounds) -> Tuple[int, int]:
     sx = bounds.width / BASE_WIDTH
     sy = bounds.height / BASE_HEIGHT
@@ -395,13 +413,20 @@ def ensure_cgclick() -> bool:
     global CGCLICK_BIN
     if CGCLICK_BIN and os.path.exists(CGCLICK_BIN) and os.access(CGCLICK_BIN, os.X_OK):
         return True
-    helper_dir = tempfile.mkdtemp(prefix="zombie-cgclick-")
-    binary_path = os.path.join(helper_dir, "zombie_cgclick")
-    source_path = f"{binary_path}.c"
-    with open(source_path, "w", encoding="utf-8") as handle:
-        handle.write(CGCLICK_SOURCE)
+    if CGCLICK_BIN_PATH.exists() and os.access(CGCLICK_BIN_PATH, os.X_OK):
+        CGCLICK_BIN = str(CGCLICK_BIN_PATH)
+        return True
+    CGCLICK_CACHE_DIR.mkdir(mode=0o700, exist_ok=True)
+    CGCLICK_SOURCE_PATH.write_text(CGCLICK_SOURCE, encoding="utf-8")
     proc = subprocess.run(
-        ["clang", "-framework", "ApplicationServices", source_path, "-o", binary_path],
+        [
+            "clang",
+            "-framework",
+            "ApplicationServices",
+            str(CGCLICK_SOURCE_PATH),
+            "-o",
+            str(CGCLICK_BIN_PATH),
+        ],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -409,7 +434,7 @@ def ensure_cgclick() -> bool:
     )
     if proc.returncode != 0:
         return False
-    CGCLICK_BIN = binary_path
+    CGCLICK_BIN = str(CGCLICK_BIN_PATH)
     return True
 
 
@@ -429,7 +454,7 @@ def click_system_events(x: int, y: int) -> bool:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=2,
+            timeout=SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS,
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
@@ -460,13 +485,22 @@ def try_click_backend(name: str, x: int, y: int) -> tuple[bool, str]:
     return (True, "") if clicked else (False, "unavailable")
 
 
+def click_backend_candidates(backend: str) -> tuple[str, ...]:
+    """Return click backends in their safe, observable dispatch order."""
+    if backend == "auto":
+        # System Events reports Accessibility permission errors, unlike a
+        # CoreGraphics event post which can appear to succeed when ignored.
+        # Do not bypass a reported failure: cgclick is explicit-only.
+        return ("system-events",)
+    return (backend,)
+
+
 def perform_click(x: int, y: int, backend: str = "auto", expected_bounds: Bounds | None = None) -> str:
     if expected_bounds is None:
         raise ClickError("real clicks require calibrated game-window bounds")
     ensure_unchanged_game_window(expected_bounds)
-    candidates = ("cgclick", "quartz", "cliclick", "system-events") if backend == "auto" else (backend,)
     failures = []
-    for candidate in candidates:
+    for candidate in click_backend_candidates(backend):
         clicked, reason = try_click_backend(candidate, x, y)
         if clicked:
             wait_after_click()
@@ -859,6 +893,8 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
         backend = perform_click(*points["ad_close_top"], args.backend, bounds)
         print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
         sleep_between(args.ad_close_wait)
+        sleep_between(args.ad_reward_wait)
+        ensure_game_ready_after_ad(bounds)
         backend = dismiss_reward_twice(
             points,
             args.backend,
@@ -1201,9 +1237,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def command_requires_focus(command: str) -> bool:
-    """Return whether a parsed command can operate on the game window."""
-    return command not in NON_OPERATING_COMMANDS
+def command_requires_focus(args: argparse.Namespace | str) -> bool:
+    """Return whether a command needs focus, exempting mock dry-runs."""
+    if isinstance(args, str):
+        return args not in NON_OPERATING_COMMANDS
+    if args.command in NON_OPERATING_COMMANDS:
+        return False
+    return not (bool(getattr(args, "mock_bounds", None)) and bool(getattr(args, "dry_run", False)))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1216,7 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
             and args.command not in {"bounds", "dry-run", "list", "state", "self-test"}
         ):
             raise ClickError("--mock-bounds is simulation-only; add --dry-run instead of executing clicks")
-        if command_requires_focus(args.command):
+        if command_requires_focus(args):
             focus_game_window_at_start()
         return args.func(args)
     except ClickError as exc:

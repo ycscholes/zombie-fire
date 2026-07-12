@@ -12,7 +12,7 @@ actions:
 ```bash
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py list
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py state
-python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py bounds
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py bounds --fit
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py dry-run click reward_dismiss
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py click reward_dismiss
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-full-from-home
@@ -34,15 +34,23 @@ aspect ratio does not look like the game window.
 Every helper click waits a random `2.5` to `3.5` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
 
+By default, the helper uses only macOS `System Events` for click delivery. It
+waits up to 8 seconds for that Accessibility dispatch, then fails closed if it
+does not complete. It never automatically falls back to `cgclick`; use
+`--backend cgclick` only as an explicit operator choice, because CoreGraphics
+delivery cannot confirm that macOS accepted the click.
+
 ## Operating Mode
 
 - Treat Computer Use screenshots as expensive. Capture once at startup and once
   before each major surface or risk gate; otherwise use `zombie_click.py` for
   deterministic clicks.
 - For patrol-truck-only tasks, do not use Computer Use screenshots at startup,
-  during the patrol run, or after completion. Use `state`, `bounds --fit`, and
-  `patrol-full-from-home`; count the run as script-attempted unless the helper
-  fails closed.
+  during the patrol run, or after completion. Use `bounds --fit` as the shell
+  preflight, then `patrol-full-from-home`; count the run as script-attempted
+  unless the helper fails closed. Do not use `state` as that shell preflight:
+  it observes the current foreground app and can report the terminal instead
+  of the game.
 - When the user explicitly asks for no screenshots, use only `state`, `bounds`,
   dry-runs, and scripted helper clicks. Do not call Computer Use screenshots for
   that run; fail closed if a step cannot be represented as a known script click.
@@ -91,9 +99,10 @@ operation. Do not bypass this pacing when adding new scripted click flows.
 ## Start And Recovery
 
 1. Run `open -b com.tencent.flue.WeApp`.
-2. For patrol-truck-only tasks, do not call Computer Use. Run helper `state`;
-   continue only when it returns `game_ready`, then run
-   `patrol-full-from-home`.
+2. For patrol-truck-only tasks, do not call Computer Use. Run helper
+   `bounds --fit`; continue only when it succeeds, then run
+   `patrol-full-from-home`. Do not gate this shell flow on `state`, because it
+   can observe the terminal as the foreground app.
 3. For non-patrol tasks, call `mcp__computer_use.get_app_state({"app":"微信"})`
    before any click and continue only when the window is `向僵尸开炮`.
 4. Run helper `state`; continue fixed clicking only when it returns
@@ -146,17 +155,20 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patr
 ```
 
 This command performs the whole patrol routine without screenshots: it checks
-the game window with `state`/bounds logic, fits the window to the calibrated
+the calibrated game-window bounds, fits the window to the calibrated
 `508x949` geometry, opens the patrol truck, attempts patrol income, runs normal
 quick patrol 3 times, runs patrol ad rewards 5 times, dismisses reward popups
 with redundant safe taps, and closes the patrol panel.
 
 Use `--quick-times N` or `--ad-times N` only when the user explicitly asks for a
 non-default count. Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect
-the planned points and waits without clicking. Do not add Computer Use
-screenshots before, during, or after this patrol-only command. If it fails
-closed because the window is not `向僵尸开炮` or the geometry is invalid, stop and
-report the blocker instead of probing with screenshots.
+the planned points and waits without clicking; mock patrol dry-runs never focus
+or locate a game window. During an ad cycle, if the top close does not return to
+the calibrated game window after the configured reward wait, the helper stops
+without tapping `ad_close_lower`. Do not add Computer Use screenshots before,
+during, or after this patrol-only command. If it fails closed because the window
+is not `向僵尸开炮` or the geometry is invalid, stop and report the blocker instead
+of probing with screenshots.
 
 Legacy patrol subcommands remain available for recovery or partial reruns:
 `click patrol_truck`, `click patrol_claim`, `patrol-quick-batch`,
