@@ -89,11 +89,8 @@ class FocusEligibilityTests(unittest.TestCase):
 
         focus.assert_not_called()
 
-    def test_auto_backend_order_prefers_system_events(self) -> None:
-        self.assertEqual(
-            zombie_click.click_backend_candidates("auto"),
-            ("system-events",),
-        )
+    def test_auto_backend_uses_cgclick(self) -> None:
+        self.assertEqual(zombie_click.click_backend_candidates("auto"), ("cgclick",))
 
     def test_system_events_click_uses_named_finite_timeout(self) -> None:
         with patch.object(zombie_click.subprocess, "run") as run:
@@ -104,7 +101,7 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(zombie_click.SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS, 8.0)
         self.assertEqual(run.call_args.kwargs["timeout"], zombie_click.SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS)
 
-    def test_auto_does_not_fall_back_after_system_events_timeout(self) -> None:
+    def test_auto_does_not_try_system_events_after_cgclick_failure(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         with (
             patch.object(zombie_click, "ensure_unchanged_game_window"),
@@ -112,15 +109,15 @@ class FocusEligibilityTests(unittest.TestCase):
             patch.object(
                 zombie_click,
                 "try_click_backend",
-                return_value=(False, "system-events click timed out"),
+                return_value=(False, "unavailable"),
             ) as attempt,
         ):
-            with self.assertRaisesRegex(zombie_click.ClickError, "system-events: system-events click timed out"):
+            with self.assertRaisesRegex(zombie_click.ClickError, "cgclick: unavailable"):
                 zombie_click.perform_click(10, 20, "auto", bounds)
 
         self.assertEqual(
             [call.args[0] for call in attempt.call_args_list],
-            ["system-events"],
+            ["cgclick"],
         )
 
     def test_system_events_timeout_raises_click_error(self) -> None:

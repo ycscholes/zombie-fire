@@ -486,12 +486,9 @@ def try_click_backend(name: str, x: int, y: int) -> tuple[bool, str]:
 
 
 def click_backend_candidates(backend: str) -> tuple[str, ...]:
-    """Return click backends in their safe, observable dispatch order."""
+    """Return the single backend selected for a click invocation."""
     if backend == "auto":
-        # System Events reports Accessibility permission errors, unlike a
-        # CoreGraphics event post which can appear to succeed when ignored.
-        # Do not bypass a reported failure: cgclick is explicit-only.
-        return ("system-events",)
+        return ("cgclick",)
     return (backend,)
 
 

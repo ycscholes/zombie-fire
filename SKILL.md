@@ -34,11 +34,10 @@ aspect ratio does not look like the game window.
 Every helper click waits a random `2.5` to `3.5` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
 
-By default, the helper uses only macOS `System Events` for click delivery. It
-waits up to 8 seconds for that Accessibility dispatch, then fails closed if it
-does not complete. It never automatically falls back to `cgclick`; use
-`--backend cgclick` only as an explicit operator choice, because CoreGraphics
-delivery cannot confirm that macOS accepted the click.
+By default, the helper uses the persistent CoreGraphics `cgclick` helper for
+click delivery. `System Events` is explicit-only (`--backend system-events`),
+waits up to 8 seconds for its Accessibility dispatch, and cannot produce
+`system-events click timed out` on the default patrol path.
 
 ## Operating Mode
 
