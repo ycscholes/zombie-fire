@@ -4,7 +4,7 @@
 
 **Goal:** Centralize the foreign-challenge reward claim sequence in a safe, one-click `legion-reward-claims` command and reuse it from the daily legion route.
 
-**Architecture:** `command_legion_reward_claims()` owns foreign-challenge navigation and one first-row all-rewards claim, followed by the legion-specific popup dismiss. `command_legion_daily_rewards()` retains daily cut and sweep work, then delegates to the reward command with its validated bounds and existing timing values. Row-selection flags are removed because later clicks are unsafe and unnecessary.
+**Architecture:** `command_legion_reward_claims()` owns foreign-challenge navigation, two sweeps, first-row all-rewards claims for legion and personal tabs, close, and return. `command_legion_daily_rewards()` retains only daily cut, then delegates with its validated bounds and timing values. Row-selection flags are removed because later clicks are unsafe and unnecessary.
 
 **Tech Stack:** Python 3 standard library, `argparse`, `unittest.mock`.
 
