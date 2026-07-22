@@ -27,8 +27,9 @@ MIN_WIDTH = 420
 MIN_HEIGHT = 760
 ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
-POST_CLICK_WAIT_MIN = 2.5
-POST_CLICK_WAIT_MAX = 3.5
+POST_CLICK_WAIT_MIN = 1.5
+POST_CLICK_WAIT_MAX = 2.5
+MIN_WAIT_SECONDS = 0.5
 # System Events can briefly stall while macOS switches application focus. Keep
 # this finite so a failed Accessibility dispatch stops the automation safely.
 SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS = 8.0
@@ -101,9 +102,10 @@ ACTIONS: Dict[str, Action] = {
     "legion_cut_once": Action(254, 797, "free daily-cut button before it becomes a diamond cost"),
     "legion_foreign_challenge": Action(121, 356, "legion foreign challenge entry"),
     "legion_sweep": Action(200, 909, "foreign challenge free sweep button"),
-    "legion_sweep_confirm": Action(321, 546, "foreign challenge free sweep confirmation"),
+    "legion_sweep_cancel": Action(187, 579, "foreign challenge sweep cancellation"),
+    "legion_sweep_confirm": Action(321, 579, "foreign challenge free sweep confirmation"),
     "legion_reward_left": Action(82, 116, "left reward tab inside foreign challenge"),
-    "legion_reward_claim_top": Action(356, 270, "top visible legion reward claim button"),
+    "legion_reward_claim_top": Action(356, 302, "top visible legion reward claim button"),
     "legion_reward_claim_row1": Action(356, 270, "visible legion reward claim row 1"),
     "legion_reward_claim_row2": Action(356, 359, "visible legion reward claim row 2"),
     "legion_reward_claim_row3": Action(356, 448, "visible legion reward claim row 3"),
@@ -111,8 +113,11 @@ ACTIONS: Dict[str, Action] = {
     "legion_reward_claim_row5": Action(356, 626, "visible legion reward claim row 5"),
     "legion_reward_claim_row6": Action(356, 715, "visible legion reward claim row 6"),
     "legion_personal_reward_tab": Action(218, 793, "personal reward tab inside foreign challenge rewards"),
-    "legion_reward_popup_dismiss": Action(250, 567, "dismiss legion reward popup"),
-    "legion_modal_close": Action(425, 196, "close legion inner modal"),
+    "legion_personal_reward_claim_top": Action(356, 302, "first visible personal legion reward claim"),
+    "legion_reward_panel_close": Action(427, 214, "close legion reward panel"),
+    "legion_foreign_challenge_back": Action(86, 909, "return from foreign challenge to legion"),
+    "legion_reward_popup_dismiss": Action(250, 600, "dismiss legion reward popup"),
+    "legion_modal_close": Action(425, 228, "close legion inner modal"),
     "shop_tab": Action(84, 885, "bottom-left shop tab"),
     "shop_special_pack_tab": Action(405, 849, "shop special-pack tab"),
     "shop_gold_free": Action(253, 413, "shop special-pack direct free gold"),
@@ -249,7 +254,7 @@ tell application "System Events"
         if (name of candidateWindow) contains "向僵尸开炮" then
           set position of candidateWindow to {{2, 33}}
           set size of candidateWindow to {{{BASE_WIDTH}, {BASE_HEIGHT}}}
-          delay 0.15
+          delay 0.5
           set frontName to name of candidateProc
           set frontBundle to ""
           try
@@ -492,23 +497,30 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
     return (backend,)
 
 
-def perform_click(x: int, y: int, backend: str = "auto", expected_bounds: Bounds | None = None) -> str:
+def perform_click(
+    x: int,
+    y: int,
+    backend: str = "auto",
+    expected_bounds: Bounds | None = None,
+    wait_after: bool = True,
+) -> str:
     if expected_bounds is None:
         raise ClickError("real clicks require calibrated game-window bounds")
+    focus_game_window(expected_bounds)
     ensure_unchanged_game_window(expected_bounds)
     failures = []
     for candidate in click_backend_candidates(backend):
         clicked, reason = try_click_backend(candidate, x, y)
         if clicked:
-            wait_after_click()
+            if wait_after:
+                wait_after_click()
             return candidate
         failures.append(f"{candidate}: {reason}")
     raise ClickError("click backend failed: " + "; ".join(failures))
 
 
 def sleep_between(seconds: float) -> None:
-    if seconds > 0:
-        time.sleep(seconds)
+    time.sleep(max(MIN_WAIT_SECONDS, seconds - 1.0))
 
 
 def run_repeated_click_flow(
@@ -537,19 +549,37 @@ def run_repeated_click_flow(
 
 
 def focus_game_window(bounds: Bounds) -> None:
-    # The command entry point already focuses the game process through System
-    # Events. Re-check here instead of issuing an unguarded title-bar click.
-    ensure_unchanged_game_window(bounds)
+    """Focus the game immediately before a click and preserve calibration."""
+    focused = focus_game_window_at_start(expected_bounds=bounds)
+    if focused != bounds:
+        raise ClickError(
+            "focused game window changed after calibration: "
+            f"expected {bounds.x},{bounds.y} {bounds.width}x{bounds.height}; "
+            f"got {focused.x},{focused.y} {focused.width}x{focused.height}"
+        )
 
 
-def focus_game_window_at_start() -> Bounds:
+def focus_game_window_at_start(expected_bounds: Bounds | None = None) -> Bounds:
     """Raise and verify the game window before any action command runs."""
-    script = r'''
+    expected_match = ""
+    expected_match_end = ""
+    if expected_bounds is not None:
+        expected_match = (
+            f"if ((item 1 of p) as integer) = {expected_bounds.x} and "
+            f"((item 2 of p) as integer) = {expected_bounds.y} and "
+            f"((item 1 of s) as integer) = {expected_bounds.width} and "
+            f"((item 2 of s) as integer) = {expected_bounds.height} then"
+        )
+        expected_match_end = "end if"
+    script = f'''
 tell application "System Events"
   repeat with candidateProc in (application processes whose background only is false)
     try
       repeat with candidateWindow in windows of candidateProc
         if (name of candidateWindow) contains "向僵尸开炮" then
+          set p to position of candidateWindow
+          set s to size of candidateWindow
+          {expected_match}
           set frontmost of candidateProc to true
           try
             perform action "AXRaise" of candidateWindow
@@ -560,7 +590,7 @@ tell application "System Events"
               error "could not focus 向僵尸开炮 window: AXRaise: " & raiseError & "; AXMain: " & mainError number mainNumber
             end try
           end try
-          delay 0.1
+          delay 0.5
           set p to position of candidateWindow
           set s to size of candidateWindow
           set candidateName to name of candidateProc
@@ -569,6 +599,7 @@ tell application "System Events"
             set candidateBundle to bundle identifier of candidateProc
           end try
           return candidateName & tab & candidateBundle & tab & (item 1 of p) & tab & (item 2 of p) & tab & (item 1 of s) & tab & (item 2 of s)
+          {expected_match_end}
         end if
       end repeat
     on error errMsg number errNum
@@ -797,9 +828,11 @@ def dismiss_reward_twice(
     wait: float,
     label: str,
 ) -> str:
-    backend = perform_click(*points["reward_dismiss"], backend_name, bounds)
+    backend = perform_click(*points["reward_dismiss"], backend_name, bounds, False)
     print(f"{label}: clicked reward-dismiss 1/2 via {backend}", flush=True)
-    sleep_between(wait)
+    # The first tap suppresses the global post-click wait, so preserve the
+    # caller's requested delay exactly instead of applying its compensation.
+    time.sleep(wait)
     backend = perform_click(*points["reward_dismiss"], backend_name, bounds)
     print(f"{label}: clicked reward-dismiss 2/2 via {backend}", flush=True)
     return backend
@@ -1015,6 +1048,139 @@ def command_mail_claim(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_daily_rewards(args: argparse.Namespace) -> int:
+    """Run patrol, mail, and legion daily rewards against one checked window."""
+    if args.mock_bounds:
+        bounds = get_bounds(args)
+        validate_bounds(bounds, allow_mock=True)
+    else:
+        snapshot = front_window_snapshot()
+        status = classify_snapshot(snapshot)
+        if status != "game_ready":
+            raise ClickError(
+                "game window is not ready: "
+                f"{status} title={snapshot.get('title')!r} "
+                f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
+            )
+        bounds = fit_game_window() if args.fit else ensure_valid_game_bounds(get_bounds(args))
+        validate_bounds(bounds, allow_mock=False)
+
+    phase_values = {
+        **vars(args),
+        "mock_bounds": bounds,
+        "fit": False,
+        "quick_times": 3,
+        "ad_times": 5,
+        "panel_wait": 2.0,
+        "claim_wait": 2.0,
+        "dismiss_wait": 1.0,
+        "quick_reward_wait": 4.5,
+        "quick_between": 2.0,
+        "ad_wait": 35.0,
+        "ad_close_wait": 1.2,
+        "ad_reward_wait": 1.0,
+        "ad_between": 2.0,
+        "close_wait": 1.5,
+        "menu_wait": 1.0,
+        "open_wait": 1.0,
+        "reward_wait": 1.2,
+        "sweep_times": 2,
+        "confirm_wait": 0.8,
+        "sweep_reward_wait": 1.2,
+        "sweep_between": 0.6,
+        "reward_page_wait": 4.0,
+    }
+    phase_args = argparse.Namespace(**phase_values)
+
+    print("daily rewards: starting patrol", flush=True)
+    command_patrol_full_from_home(phase_args)
+    print("daily rewards: starting mail", flush=True)
+    command_mail_claim(phase_args)
+    print("daily rewards: starting legion", flush=True)
+    command_legion_daily_rewards(phase_args)
+    print("daily rewards complete: attempted patrol, mail, and legion rewards")
+    return 0
+
+
+def command_legion_daily_rewards(args: argparse.Namespace) -> int:
+    """Run the verified daily-cut, foreign-sweep, and legion-reward sequence."""
+    if args.sweep_times < 1:
+        raise ClickError("--sweep-times must be >= 1")
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(
+        bounds,
+        "legion_tab",
+        "legion_daily_cut",
+        "legion_cut_once",
+        "reward_dismiss",
+        "legion_modal_close",
+        "legion_foreign_challenge",
+        "legion_sweep",
+        "legion_sweep_confirm",
+        "legion_reward_popup_dismiss",
+        "legion_reward_left",
+        "legion_reward_claim_top",
+        "legion_personal_reward_tab",
+        "legion_personal_reward_claim_top",
+        "legion_reward_panel_close",
+        "legion_foreign_challenge_back",
+    )
+    if args.dry_run:
+        print(
+            "legion daily rewards dry-run: "
+            f"sweep_times={args.sweep_times}, confirm_wait={args.confirm_wait}, "
+            f"sweep_reward_wait={args.sweep_reward_wait}, sweep_between={args.sweep_between}, "
+            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
+            f"points={points}"
+        )
+        return 0
+
+    backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    print(f"legion daily rewards: clicked legion tab via {backend}", flush=True)
+    backend = perform_click(*points["legion_daily_cut"], args.backend, bounds)
+    print(f"legion daily rewards: opened daily cut via {backend}", flush=True)
+    backend = perform_click(*points["legion_cut_once"], args.backend, bounds)
+    print(f"legion daily rewards: clicked daily cut once via {backend}", flush=True)
+    backend = perform_click(*points["reward_dismiss"], args.backend, bounds)
+    print(f"legion daily rewards: dismissed daily-cut reward info via {backend}", flush=True)
+    backend = perform_click(*points["legion_modal_close"], args.backend, bounds)
+    print(f"legion daily rewards: closed daily-cut modal via {backend}", flush=True)
+
+    backend = perform_click(*points["legion_foreign_challenge"], args.backend, bounds)
+    print(f"legion daily rewards: opened foreign challenge via {backend}", flush=True)
+    backend = run_repeated_click_flow(
+        points={
+            "sweep": points["legion_sweep"],
+            "confirm": points["legion_sweep_confirm"],
+            "dismiss": points["legion_reward_popup_dismiss"],
+        },
+        bounds=bounds,
+        backend_name=args.backend,
+        count=args.sweep_times,
+        between=args.sweep_between,
+        steps=(
+            ("sweep", "legion daily rewards sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
+            ("confirm", "legion daily rewards sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
+            ("dismiss", "legion daily rewards sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
+        ),
+    )
+
+    backend = perform_click(*points["legion_reward_left"], args.backend, bounds)
+    print(f"legion daily rewards: opened legion rewards via {backend}", flush=True)
+    sleep_between(args.reward_page_wait)
+    backend = perform_click(*points["legion_reward_claim_top"], args.backend, bounds)
+    print(f"legion daily rewards: clicked first legion reward claim via {backend}", flush=True)
+    backend = perform_click(*points["legion_personal_reward_tab"], args.backend, bounds)
+    print(f"legion daily rewards: opened personal rewards via {backend}", flush=True)
+    backend = perform_click(*points["legion_personal_reward_claim_top"], args.backend, bounds)
+    print(f"legion daily rewards: clicked first personal reward claim via {backend}", flush=True)
+    backend = perform_click(*points["legion_reward_panel_close"], args.backend, bounds)
+    print(f"legion daily rewards: closed legion reward panel via {backend}", flush=True)
+    backend = perform_click(*points["legion_foreign_challenge_back"], args.backend, bounds)
+    print(f"legion daily rewards complete: returned to legion via {backend}")
+    return 0
+
+
 def command_legion_reward_claims(args: argparse.Namespace) -> int:
     if args.rows < 1 or args.rows > 6:
         raise ClickError("--rows must be between 1 and 6")
@@ -1024,6 +1190,9 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
     if end_row > 6:
         raise ClickError("--start-row + --rows - 1 must be <= 6")
     bounds = prepare_command_bounds(args)
+    legion_tab_point = scale_point(ACTIONS["legion_tab"], bounds)
+    foreign_challenge_point = scale_point(ACTIONS["legion_foreign_challenge"], bounds)
+    reward_tab_point = scale_point(ACTIONS["legion_reward_left"], bounds)
     claim_points = [
         scale_point(ACTIONS[f"legion_reward_claim_row{idx}"], bounds)
         for idx in range(args.start_row, end_row + 1)
@@ -1033,11 +1202,20 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         print(
             "legion reward claims dry-run: "
             f"start_row={args.start_row}, rows={args.rows}, reward_wait={args.reward_wait}, "
-            f"between={args.between}, claim_points={claim_points}, "
+            f"reward_page_wait={args.reward_page_wait}, "
+            f"between={args.between}, legion_tab_point={legion_tab_point}, "
+            f"foreign_challenge_point={foreign_challenge_point}, reward_tab_point={reward_tab_point}, "
+            f"claim_points={claim_points}, "
             f"dismiss_point={dismiss_point}"
         )
         return 0
-    backend = ""
+    backend = perform_click(*legion_tab_point, args.backend, bounds)
+    print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
+    backend = perform_click(*foreign_challenge_point, args.backend, bounds)
+    print(f"legion reward claims: clicked foreign challenge via {backend}", flush=True)
+    backend = perform_click(*reward_tab_point, args.backend, bounds)
+    print(f"legion reward claims: clicked rewards tab via {backend}", flush=True)
+    sleep_between(args.reward_page_wait)
     for offset, point in enumerate(claim_points):
         row_number = args.start_row + offset
         backend = perform_click(*point, args.backend, bounds)
@@ -1204,12 +1382,36 @@ def build_parser() -> argparse.ArgumentParser:
     mail_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     mail_parser.set_defaults(func=command_mail_claim)
 
+    daily_parser = sub.add_parser(
+        "daily-rewards",
+        help="run patrol, mail, and legion daily rewards with one checked game window",
+    )
+    daily_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
+    daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    daily_parser.add_argument("--dry-run", action="store_true", help="print all three planned flows without clicking or sleeping")
+    daily_parser.set_defaults(func=command_daily_rewards)
+
+    legion_daily_parser = sub.add_parser(
+        "legion-daily-rewards",
+        help="run the verified daily-cut, two foreign sweeps, and legion reward claim sequence",
+    )
+    legion_daily_parser.add_argument("--sweep-times", type=int, default=2)
+    legion_daily_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
+    legion_daily_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.2)
+    legion_daily_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
+    legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
+    legion_daily_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
+    legion_daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    legion_daily_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    legion_daily_parser.set_defaults(func=command_legion_daily_rewards)
+
     legion_reward_parser = sub.add_parser(
         "legion-reward-claims",
         help="claim visible direct-free legion reward rows after one verified reward-page screenshot",
     )
     legion_reward_parser.add_argument("--rows", type=int, default=6)
     legion_reward_parser.add_argument("--start-row", type=int, default=1)
+    legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
     legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     legion_reward_parser.add_argument("--between", type=non_negative_float, default=0.35)
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")

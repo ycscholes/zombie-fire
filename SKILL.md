@@ -17,6 +17,8 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py dry-
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py click reward_dismiss
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-full-from-home
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 2,33,508,949 patrol-full-from-home --dry-run
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 2,33,508,949 daily-rewards --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-quick-batch --times 3
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-batch
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-from-home --times 5
@@ -25,13 +27,14 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legi
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 0,33,508,949 legion-sweep-batch --times 2 --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims --rows 6
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims --start-row 2 --rows 4
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
 ```
 
 The helper maps the normal `508x949` Computer Use coordinate space to the
 current front WeChat window. It aborts when the front app, window size, or
 aspect ratio does not look like the game window.
 
-Every helper click waits a random `2.5` to `3.5` seconds before the next helper
+Every helper click waits a random `1.5` to `2.5` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
 
 By default, the helper uses the persistent CoreGraphics `cgclick` helper for
@@ -175,6 +178,24 @@ Legacy patrol subcommands remain available for recovery or partial reruns:
 requests a partial patrol action or the full command is not appropriate. Never
 click the quick-patrol `+`.
 
+## Combined Daily Rewards
+
+Use `daily-rewards` when the requested scope is exactly patrol, mail, and
+legion free rewards:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
+```
+
+It performs the complete patrol route, mail claim, then legion daily-rewards
+route. The command validates and calibrates the game window once before the
+first action, then preserves those bounds for all three phases. It stops on the
+first failed phase, rather than continuing clicks on an unknown screen.
+
+Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all three flows
+without focusing a game window, clicking, or sleeping. It retains the existing
+defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
+
 ## Free Red-Dot Surfaces
 
 - `日历`: open once, click visible safe gift with `calendar_gift`, confirm reward,
@@ -204,6 +225,19 @@ click the quick-patrol `+`.
   ambiguous commercial red dot.
 
 ## Legion
+
+For the complete verified free-reward route, first use Computer Use to confirm
+the daily-cut button is direct-free and the foreign challenge has two free
+sweeps available, then run:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
+```
+
+It enters the legion tab, attempts `每日一刀` once, closes its modal, runs two
+foreign-challenge sweeps, and claims the top visible legion reward. It must not
+be used when a daily cut, sweep, or reward button is paid, ad-gated, already
+completed, or otherwise unclear.
 
 Low-token default: run `每日一刀` as a default legion daily task, but do not spend
 extra screenshots proving its result. The default legion run is: `每日一刀`
