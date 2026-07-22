@@ -253,9 +253,10 @@ attempt -> `异域挑战` sweep -> visible reward rows.
 2. `异域挑战`: after one screenshot confirms the page shows `今日挑战次数: 2/2`
    and a green free `扫荡` button, run `legion-reward-claims`. It enters the
    foreign challenge, performs two sweep/confirm/dismiss cycles, opens `奖励`,
-   clicks the first `军团奖励` entry once, switches to `个人奖励`, clicks its first
-   entry once, closes the panel, and returns to the legion page. Each first-row
-   click collects all available rewards for that tab; do not click later rows.
+   clicks the first `军团奖励` entry once and dismisses its reward popup, switches
+   to `个人奖励`, clicks its first entry once and dismisses its popup, closes the
+   panel, and returns to the legion page. Each first-row click collects all
+   available rewards for that tab; do not click later rows.
    The sweep dismiss uses `legion_reward_popup_dismiss`, not generic
    `reward_dismiss`. Stop if the boss is not open, the confirm prompt is not the
    free historical-damage prompt, or the count does not change.

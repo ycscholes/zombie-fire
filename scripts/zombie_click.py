@@ -1179,6 +1179,7 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         "legion_reward_popup_dismiss",
         "legion_reward_left",
         "legion_reward_claim_top",
+        "reward_dismiss",
         "legion_personal_reward_tab",
         "legion_personal_reward_claim_top",
         "legion_reward_panel_close",
@@ -1216,8 +1217,10 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
     for action, message, wait in (
         ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),
         ("legion_reward_claim_top", "clicked legion all-rewards claim", 0),
+        ("reward_dismiss", "dismissed legion reward", 0),
         ("legion_personal_reward_tab", "clicked personal rewards tab", 0),
         ("legion_personal_reward_claim_top", "clicked personal all-rewards claim", 0),
+        ("reward_dismiss", "dismissed personal reward", 0),
         ("legion_reward_panel_close", "closed rewards panel", 0),
         ("legion_foreign_challenge_back", "returned to legion", 0),
     ):
