@@ -1114,10 +1114,6 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         "legion_cut_once",
         "reward_dismiss",
         "legion_modal_close",
-        "legion_foreign_challenge",
-        "legion_sweep",
-        "legion_sweep_confirm",
-        "legion_reward_popup_dismiss",
     )
     if args.dry_run:
         print(
@@ -1132,7 +1128,10 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
                 mock_bounds=bounds,
                 backend=args.backend,
                 dry_run=True,
-                from_foreign_challenge=True,
+                sweep_times=args.sweep_times,
+                confirm_wait=args.confirm_wait,
+                sweep_reward_wait=args.sweep_reward_wait,
+                sweep_between=args.sweep_between,
                 reward_page_wait=args.reward_page_wait,
                 reward_wait=args.reward_wait,
             )
@@ -1150,9 +1149,55 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     backend = perform_click(*points["legion_modal_close"], args.backend, bounds)
     print(f"legion daily rewards: closed daily-cut modal via {backend}", flush=True)
 
+    command_legion_reward_claims(
+        argparse.Namespace(
+            mock_bounds=bounds,
+            backend=args.backend,
+            dry_run=False,
+            sweep_times=args.sweep_times,
+            confirm_wait=args.confirm_wait,
+            sweep_reward_wait=args.sweep_reward_wait,
+            sweep_between=args.sweep_between,
+            reward_page_wait=args.reward_page_wait,
+            reward_wait=args.reward_wait,
+        )
+    )
+    print("legion daily rewards complete: attempted daily cut and full foreign-challenge rewards")
+    return 0
+
+
+def command_legion_reward_claims(args: argparse.Namespace) -> int:
+    if args.sweep_times < 1:
+        raise ClickError("--sweep-times must be >= 1")
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(
+        bounds,
+        "legion_tab",
+        "legion_foreign_challenge",
+        "legion_sweep",
+        "legion_sweep_confirm",
+        "legion_reward_popup_dismiss",
+        "legion_reward_left",
+        "legion_reward_claim_top",
+        "legion_personal_reward_tab",
+        "legion_personal_reward_claim_top",
+        "legion_reward_panel_close",
+        "legion_foreign_challenge_back",
+    )
+    if args.dry_run:
+        print(
+            "legion reward claims dry-run: "
+            f"sweep_times={args.sweep_times}, confirm_wait={args.confirm_wait}, "
+            f"sweep_reward_wait={args.sweep_reward_wait}, sweep_between={args.sweep_between}, "
+            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
+            f"points={points}"
+        )
+        return 0
+    backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
     backend = perform_click(*points["legion_foreign_challenge"], args.backend, bounds)
-    print(f"legion daily rewards: opened foreign challenge via {backend}", flush=True)
-    backend = run_repeated_click_flow(
+    print(f"legion reward claims: clicked foreign challenge via {backend}", flush=True)
+    run_repeated_click_flow(
         points={
             "sweep": points["legion_sweep"],
             "confirm": points["legion_sweep_confirm"],
@@ -1163,65 +1208,24 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         count=args.sweep_times,
         between=args.sweep_between,
         steps=(
-            ("sweep", "legion daily rewards sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
-            ("confirm", "legion daily rewards sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
-            ("dismiss", "legion daily rewards sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
+            ("sweep", "legion reward claims sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
+            ("confirm", "legion reward claims sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
+            ("dismiss", "legion reward claims sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )
-
-    command_legion_reward_claims(
-        argparse.Namespace(
-            mock_bounds=bounds,
-            backend=args.backend,
-            dry_run=False,
-            from_foreign_challenge=True,
-            reward_page_wait=args.reward_page_wait,
-            reward_wait=args.reward_wait,
-        )
-    )
-    print("legion daily rewards complete: attempted daily cut, sweeps, and one all-rewards claim")
-    return 0
-
-
-def command_legion_reward_claims(args: argparse.Namespace) -> int:
-    bounds = prepare_command_bounds(args)
-    action_names = [
-        "legion_reward_left",
-        "legion_reward_claim_top",
-        "legion_reward_popup_dismiss",
-    ]
-    if not args.from_foreign_challenge:
-        action_names[:0] = ["legion_tab", "legion_foreign_challenge"]
-    points = scaled_points(bounds, *action_names)
-    if args.dry_run:
-        print(
-            "legion reward claims dry-run: "
-            f"from_foreign_challenge={args.from_foreign_challenge}, "
-            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
-            f"points={points}"
-        )
-        return 0
-    steps = []
-    if not args.from_foreign_challenge:
-        steps.extend(
-            [
-                ("legion_tab", "clicked legion tab", 0),
-                ("legion_foreign_challenge", "clicked foreign challenge", 0),
-            ]
-        )
-    steps.extend(
-        [
-            ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),
-            ("legion_reward_claim_top", "clicked all-rewards claim", args.reward_wait),
-            ("legion_reward_popup_dismiss", "clicked reward-dismiss", 0),
-        ]
-    )
-    for action, message, wait in steps:
+    for action, message, wait in (
+        ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),
+        ("legion_reward_claim_top", "clicked legion all-rewards claim", 0),
+        ("legion_personal_reward_tab", "clicked personal rewards tab", 0),
+        ("legion_personal_reward_claim_top", "clicked personal all-rewards claim", 0),
+        ("legion_reward_panel_close", "closed rewards panel", 0),
+        ("legion_foreign_challenge_back", "returned to legion", 0),
+    ):
         backend = perform_click(*points[action], args.backend, bounds)
         print(f"legion reward claims: {message} via {backend}", flush=True)
         if wait:
             sleep_between(wait)
-    print(f"legion reward claims complete: attempted one all-rewards claim via {backend}")
+    print(f"legion reward claims complete: attempted full foreign-challenge route via {backend}")
     return 0
 
 
@@ -1403,13 +1407,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     legion_reward_parser = sub.add_parser(
         "legion-reward-claims",
-        help="claim all visible direct-free legion rewards with the verified first claim button",
+        help="run foreign-challenge sweeps and claim the first legion and personal reward entries",
     )
+    legion_reward_parser.add_argument("--sweep-times", type=int, default=2)
+    legion_reward_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
+    legion_reward_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.2)
+    legion_reward_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
     legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
     legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_reward_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
-    legion_reward_parser.set_defaults(func=command_legion_reward_claims, from_foreign_challenge=False)
+    legion_reward_parser.set_defaults(func=command_legion_reward_claims)
 
     legion_sweep_parser = sub.add_parser(
         "legion-sweep-batch",

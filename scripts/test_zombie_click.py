@@ -203,7 +203,7 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertEqual(events, ["focus", "verify", "click"])
 
-    def test_legion_reward_claims_navigates_and_clicks_only_the_single_claim(self) -> None:
+    def test_legion_reward_claims_runs_the_full_foreign_challenge_route(self) -> None:
         args = zombie_click.build_parser().parse_args(["legion-reward-claims"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         clicks: list[tuple[int, int]] = []
@@ -224,18 +224,27 @@ class FocusEligibilityTests(unittest.TestCase):
             [
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_tab"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_sweep"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_sweep_confirm"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_popup_dismiss"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_sweep"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_sweep_confirm"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_popup_dismiss"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_left"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_claim_top"], bounds),
-                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_popup_dismiss"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_personal_reward_tab"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_personal_reward_claim_top"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_panel_close"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge_back"], bounds),
             ],
         )
-        self.assertEqual(waits, [4.0, 1.0])
+        self.assertEqual(waits, [0.8, 1.2, 0.6, 0.8, 1.2, 4.0])
 
     def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
         with self.assertRaises(SystemExit):
             zombie_click.build_parser().parse_args(["legion-reward-claims", "--rows", "1"])
 
-    def test_legion_daily_rewards_delegates_reward_claims_after_sweeps(self) -> None:
+    def test_legion_daily_rewards_delegates_full_foreign_challenge_route_after_daily_cut(self) -> None:
         args = zombie_click.build_parser().parse_args(["legion-daily-rewards"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         clicks: list[tuple[int, int]] = []
@@ -260,19 +269,14 @@ class FocusEligibilityTests(unittest.TestCase):
                 point("legion_cut_once"),
                 point("reward_dismiss"),
                 point("legion_modal_close"),
-                point("legion_foreign_challenge"),
-                point("legion_sweep"),
-                point("legion_sweep_confirm"),
-                point("legion_reward_popup_dismiss"),
-                point("legion_sweep"),
-                point("legion_sweep_confirm"),
-                point("legion_reward_popup_dismiss"),
             ],
         )
-        self.assertEqual(clicks.count(point("legion_sweep")), 2)
         delegated = claims.call_args.args[0]
         self.assertIs(delegated.mock_bounds, bounds)
-        self.assertTrue(delegated.from_foreign_challenge)
+        self.assertEqual(delegated.sweep_times, args.sweep_times)
+        self.assertEqual(delegated.confirm_wait, args.confirm_wait)
+        self.assertEqual(delegated.sweep_reward_wait, args.sweep_reward_wait)
+        self.assertEqual(delegated.sweep_between, args.sweep_between)
         self.assertEqual(delegated.reward_page_wait, args.reward_page_wait)
         self.assertEqual(delegated.reward_wait, args.reward_wait)
 

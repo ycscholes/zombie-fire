@@ -233,10 +233,10 @@ sweeps available, then run:
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
 ```
 
-It enters the legion tab, attempts `每日一刀` once, closes its modal, runs two
-foreign-challenge sweeps, and claims the top visible legion reward. It must not
-be used when a daily cut, sweep, or reward button is paid, ad-gated, already
-completed, or otherwise unclear.
+It enters the legion tab, attempts `每日一刀` once, closes its modal, then runs
+the complete foreign-challenge reward route. It must not be used when a daily
+cut, sweep, or reward button is paid, ad-gated, already completed, or otherwise
+unclear.
 
 Low-token default: run `每日一刀` as a default legion daily task, but do not spend
 extra screenshots proving its result. The default legion run is: `每日一刀`
@@ -250,25 +250,15 @@ attempt -> `异域挑战` sweep -> visible reward rows.
    close it with `legion_modal_close` and report that the daily-cut check was
    executed but no free cut was claimed. This satisfies the daily task without
    spending tokens to prove the outcome.
-2. `异域挑战`: after one screenshot confirms the page shows `今日挑战次数: N/2`
-   and a green free `扫荡` button, run
-   `legion-sweep-batch --times N`. Do not screenshot between sweep cycles. The
-   batch clicks `扫荡`, the free historical-damage confirmation, and the legion
-   reward popup dismiss point. Re-capture once afterward to verify `0/2` or a
-   changed count. Stop if the boss is not in an open period, the confirm prompt
-   is not the free historical-damage prompt, or the count does not change.
-3. `异域挑战` -> left `奖励`: use `legion_foreign_challenge` then
-   `legion_reward_left`; after a screenshot confirms the first visible
-   direct-free `领取` button, run `legion-reward-claims`. It enters the foreign
-   challenge reward page, clicks that first button once to collect all available
-   rewards, then dismisses the popup. Do not click later rows. The command uses
-   `legion_reward_popup_dismiss`, not the generic
-   `reward_dismiss`, because the legion reward popup closes from a higher
-   center area. If a verified row click does not produce a reward popup, use one
-   Computer Use recovery click for that row, update the helper coordinate, and
-   stop batching stale points. Re-capture once afterward; if the page closes or
-   the red dot remains, stop probing and mark the reward-entry coordinate as
-   needing calibration.
+2. `异域挑战`: after one screenshot confirms the page shows `今日挑战次数: 2/2`
+   and a green free `扫荡` button, run `legion-reward-claims`. It enters the
+   foreign challenge, performs two sweep/confirm/dismiss cycles, opens `奖励`,
+   clicks the first `军团奖励` entry once, switches to `个人奖励`, clicks its first
+   entry once, closes the panel, and returns to the legion page. Each first-row
+   click collects all available rewards for that tab; do not click later rows.
+   The sweep dismiss uses `legion_reward_popup_dismiss`, not generic
+   `reward_dismiss`. Stop if the boss is not open, the confirm prompt is not the
+   free historical-damage prompt, or the count does not change.
 4. Do not click legion ads/videos, strengthening costs, task pages, donation,
    hall, shop, or unclear actions.
 5. Token budget guard: if any legion helper coordinate misses once, do one
