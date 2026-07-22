@@ -25,8 +25,7 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patr
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mail-claim
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-sweep-batch --times 2
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 0,33,508,949 legion-sweep-batch --times 2 --dry-run
-python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims --rows 6
-python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims --start-row 2 --rows 4
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
 ```
 
@@ -138,8 +137,8 @@ waits up to 8 seconds for its Accessibility dispatch, and cannot produce
   home page without screenshots. Use legacy patrol income, normal quick patrol,
   or patrol-ad subcommands only for partial reruns. Also use Tier 1 for calendar
   gift, battle-pass free claim,
-  work-plan sign-in, the single free legion daily cut, and visible legion
-  reward rows with `legion-reward-claims --rows N`. Read the visible
+  work-plan sign-in, the single free legion daily cut, and the visible legion
+  all-rewards claim with `legion-reward-claims`. Read the visible
   count/state once, perform the known click/dismiss sequence, then verify at the
   next meaningful count, reward popup, or completion point. For patrol ads,
   default to the helper's `patrol-ads-batch` command after confirming the panel
@@ -259,20 +258,17 @@ attempt -> `异域挑战` sweep -> visible reward rows.
    changed count. Stop if the boss is not in an open period, the confirm prompt
    is not the free historical-damage prompt, or the count does not change.
 3. `异域挑战` -> left `奖励`: use `legion_foreign_challenge` then
-   `legion_reward_left`; claim visible `军团奖励` with
-   `legion_reward_claim_top` or, after a screenshot confirms a stack of visible
-   direct-free `领取` buttons, run `legion-reward-claims --rows N` for those
-   rows. The batch uses `legion_reward_popup_dismiss`, not the generic
+   `legion_reward_left`; after a screenshot confirms the first visible
+   direct-free `领取` button, run `legion-reward-claims`. It enters the foreign
+   challenge reward page, clicks that first button once to collect all available
+   rewards, then dismisses the popup. Do not click later rows. The command uses
+   `legion_reward_popup_dismiss`, not the generic
    `reward_dismiss`, because the legion reward popup closes from a higher
    center area. If a verified row click does not produce a reward popup, use one
    Computer Use recovery click for that row, update the helper coordinate, and
    stop batching stale points. Re-capture once afterward; if the page closes or
    the red dot remains, stop probing and mark the reward-entry coordinate as
    needing calibration.
-   Switch to `个人奖励` with
-   `legion_personal_reward_tab`, and claim visible direct-free buttons. A
-   single click may batch-claim thresholds; verify claimed state before clicking
-   more.
 4. Do not click legion ads/videos, strengthening costs, task pages, donation,
    hall, shop, or unclear actions.
 5. Token budget guard: if any legion helper coordinate misses once, do one

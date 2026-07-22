@@ -203,8 +203,8 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertEqual(events, ["focus", "verify", "click"])
 
-    def test_legion_reward_claims_navigates_to_rewards_before_the_first_claim(self) -> None:
-        args = zombie_click.build_parser().parse_args(["legion-reward-claims", "--rows", "1"])
+    def test_legion_reward_claims_navigates_and_clicks_only_the_single_claim(self) -> None:
+        args = zombie_click.build_parser().parse_args(["legion-reward-claims"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         clicks: list[tuple[int, int]] = []
         waits: list[float] = []
@@ -225,13 +225,17 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_tab"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_left"], bounds),
-                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_claim_row1"], bounds),
+                zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_claim_top"], bounds),
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_reward_popup_dismiss"], bounds),
             ],
         )
         self.assertEqual(waits, [4.0, 1.0])
 
-    def test_legion_daily_rewards_runs_one_cut_two_sweeps_and_reward_claim(self) -> None:
+    def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
+        with self.assertRaises(SystemExit):
+            zombie_click.build_parser().parse_args(["legion-reward-claims", "--rows", "1"])
+
+    def test_legion_daily_rewards_delegates_reward_claims_after_sweeps(self) -> None:
         args = zombie_click.build_parser().parse_args(["legion-daily-rewards"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         clicks: list[tuple[int, int]] = []
@@ -243,6 +247,7 @@ class FocusEligibilityTests(unittest.TestCase):
                 side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
             ),
             patch.object(zombie_click, "sleep_between"),
+            patch.object(zombie_click, "command_legion_reward_claims", return_value=0) as claims,
         ):
             self.assertEqual(zombie_click.command_legion_daily_rewards(args), 0)
 
@@ -250,6 +255,11 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(
             clicks,
             [
+                point("legion_tab"),
+                point("legion_daily_cut"),
+                point("legion_cut_once"),
+                point("reward_dismiss"),
+                point("legion_modal_close"),
                 point("legion_foreign_challenge"),
                 point("legion_sweep"),
                 point("legion_sweep_confirm"),
@@ -257,15 +267,14 @@ class FocusEligibilityTests(unittest.TestCase):
                 point("legion_sweep"),
                 point("legion_sweep_confirm"),
                 point("legion_reward_popup_dismiss"),
-                point("legion_reward_left"),
-                point("legion_reward_claim_top"),
-                point("legion_personal_reward_tab"),
-                point("legion_personal_reward_claim_top"),
-                point("legion_reward_panel_close"),
-                point("legion_foreign_challenge_back"),
             ],
         )
         self.assertEqual(clicks.count(point("legion_sweep")), 2)
+        delegated = claims.call_args.args[0]
+        self.assertIs(delegated.mock_bounds, bounds)
+        self.assertTrue(delegated.from_foreign_challenge)
+        self.assertEqual(delegated.reward_page_wait, args.reward_page_wait)
+        self.assertEqual(delegated.reward_wait, args.reward_wait)
 
     def test_system_events_timeout_raises_click_error(self) -> None:
         with patch.object(

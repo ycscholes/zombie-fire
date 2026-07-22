@@ -1118,12 +1118,6 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         "legion_sweep",
         "legion_sweep_confirm",
         "legion_reward_popup_dismiss",
-        "legion_reward_left",
-        "legion_reward_claim_top",
-        "legion_personal_reward_tab",
-        "legion_personal_reward_claim_top",
-        "legion_reward_panel_close",
-        "legion_foreign_challenge_back",
     )
     if args.dry_run:
         print(
@@ -1132,6 +1126,16 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
             f"sweep_reward_wait={args.sweep_reward_wait}, sweep_between={args.sweep_between}, "
             f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
             f"points={points}"
+        )
+        command_legion_reward_claims(
+            argparse.Namespace(
+                mock_bounds=bounds,
+                backend=args.backend,
+                dry_run=True,
+                from_foreign_challenge=True,
+                reward_page_wait=args.reward_page_wait,
+                reward_wait=args.reward_wait,
+            )
         )
         return 0
 
@@ -1165,67 +1169,59 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         ),
     )
 
-    backend = perform_click(*points["legion_reward_left"], args.backend, bounds)
-    print(f"legion daily rewards: opened legion rewards via {backend}", flush=True)
-    sleep_between(args.reward_page_wait)
-    backend = perform_click(*points["legion_reward_claim_top"], args.backend, bounds)
-    print(f"legion daily rewards: clicked first legion reward claim via {backend}", flush=True)
-    backend = perform_click(*points["legion_personal_reward_tab"], args.backend, bounds)
-    print(f"legion daily rewards: opened personal rewards via {backend}", flush=True)
-    backend = perform_click(*points["legion_personal_reward_claim_top"], args.backend, bounds)
-    print(f"legion daily rewards: clicked first personal reward claim via {backend}", flush=True)
-    backend = perform_click(*points["legion_reward_panel_close"], args.backend, bounds)
-    print(f"legion daily rewards: closed legion reward panel via {backend}", flush=True)
-    backend = perform_click(*points["legion_foreign_challenge_back"], args.backend, bounds)
-    print(f"legion daily rewards complete: returned to legion via {backend}")
+    command_legion_reward_claims(
+        argparse.Namespace(
+            mock_bounds=bounds,
+            backend=args.backend,
+            dry_run=False,
+            from_foreign_challenge=True,
+            reward_page_wait=args.reward_page_wait,
+            reward_wait=args.reward_wait,
+        )
+    )
+    print("legion daily rewards complete: attempted daily cut, sweeps, and one all-rewards claim")
     return 0
 
 
 def command_legion_reward_claims(args: argparse.Namespace) -> int:
-    if args.rows < 1 or args.rows > 6:
-        raise ClickError("--rows must be between 1 and 6")
-    if args.start_row < 1 or args.start_row > 6:
-        raise ClickError("--start-row must be between 1 and 6")
-    end_row = args.start_row + args.rows - 1
-    if end_row > 6:
-        raise ClickError("--start-row + --rows - 1 must be <= 6")
     bounds = prepare_command_bounds(args)
-    legion_tab_point = scale_point(ACTIONS["legion_tab"], bounds)
-    foreign_challenge_point = scale_point(ACTIONS["legion_foreign_challenge"], bounds)
-    reward_tab_point = scale_point(ACTIONS["legion_reward_left"], bounds)
-    claim_points = [
-        scale_point(ACTIONS[f"legion_reward_claim_row{idx}"], bounds)
-        for idx in range(args.start_row, end_row + 1)
+    action_names = [
+        "legion_reward_left",
+        "legion_reward_claim_top",
+        "legion_reward_popup_dismiss",
     ]
-    dismiss_point = scale_point(ACTIONS["legion_reward_popup_dismiss"], bounds)
+    if not args.from_foreign_challenge:
+        action_names[:0] = ["legion_tab", "legion_foreign_challenge"]
+    points = scaled_points(bounds, *action_names)
     if args.dry_run:
         print(
             "legion reward claims dry-run: "
-            f"start_row={args.start_row}, rows={args.rows}, reward_wait={args.reward_wait}, "
-            f"reward_page_wait={args.reward_page_wait}, "
-            f"between={args.between}, legion_tab_point={legion_tab_point}, "
-            f"foreign_challenge_point={foreign_challenge_point}, reward_tab_point={reward_tab_point}, "
-            f"claim_points={claim_points}, "
-            f"dismiss_point={dismiss_point}"
+            f"from_foreign_challenge={args.from_foreign_challenge}, "
+            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
+            f"points={points}"
         )
         return 0
-    backend = perform_click(*legion_tab_point, args.backend, bounds)
-    print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
-    backend = perform_click(*foreign_challenge_point, args.backend, bounds)
-    print(f"legion reward claims: clicked foreign challenge via {backend}", flush=True)
-    backend = perform_click(*reward_tab_point, args.backend, bounds)
-    print(f"legion reward claims: clicked rewards tab via {backend}", flush=True)
-    sleep_between(args.reward_page_wait)
-    for offset, point in enumerate(claim_points):
-        row_number = args.start_row + offset
-        backend = perform_click(*point, args.backend, bounds)
-        print(f"legion reward row {row_number}: clicked claim via {backend}", flush=True)
-        sleep_between(args.reward_wait)
-        backend = perform_click(*dismiss_point, args.backend, bounds)
-        print(f"legion reward row {row_number}: clicked reward-dismiss via {backend}", flush=True)
-        if offset + 1 < len(claim_points):
-            sleep_between(args.between)
-    print(f"legion reward claims complete: attempted rows {args.start_row}-{end_row} via {backend}")
+    steps = []
+    if not args.from_foreign_challenge:
+        steps.extend(
+            [
+                ("legion_tab", "clicked legion tab", 0),
+                ("legion_foreign_challenge", "clicked foreign challenge", 0),
+            ]
+        )
+    steps.extend(
+        [
+            ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),
+            ("legion_reward_claim_top", "clicked all-rewards claim", args.reward_wait),
+            ("legion_reward_popup_dismiss", "clicked reward-dismiss", 0),
+        ]
+    )
+    for action, message, wait in steps:
+        backend = perform_click(*points[action], args.backend, bounds)
+        print(f"legion reward claims: {message} via {backend}", flush=True)
+        if wait:
+            sleep_between(wait)
+    print(f"legion reward claims complete: attempted one all-rewards claim via {backend}")
     return 0
 
 
@@ -1407,16 +1403,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     legion_reward_parser = sub.add_parser(
         "legion-reward-claims",
-        help="claim visible direct-free legion reward rows after one verified reward-page screenshot",
+        help="claim all visible direct-free legion rewards with the verified first claim button",
     )
-    legion_reward_parser.add_argument("--rows", type=int, default=6)
-    legion_reward_parser.add_argument("--start-row", type=int, default=1)
     legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
     legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
-    legion_reward_parser.add_argument("--between", type=non_negative_float, default=0.35)
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_reward_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
-    legion_reward_parser.set_defaults(func=command_legion_reward_claims)
+    legion_reward_parser.set_defaults(func=command_legion_reward_claims, from_foreign_challenge=False)
 
     legion_sweep_parser = sub.add_parser(
         "legion-sweep-batch",
