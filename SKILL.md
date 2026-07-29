@@ -23,6 +23,8 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patr
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-batch
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-from-home --times 5
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mail-claim
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py calendar-claim
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py welfare-claim
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-sweep-batch --times 2
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 0,33,508,949 legion-sweep-batch --times 2 --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims
@@ -186,19 +188,28 @@ legion free rewards:
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
 ```
 
-It performs the complete patrol route, mail claim, then legion daily-rewards
-route. The command validates and calibrates the game window once before the
-first action, then preserves those bounds for all three phases. It stops on the
-first failed phase, rather than continuing clicks on an unknown screen.
+It performs the complete patrol route, calendar free-gift claim, welfare free
+reward dismissal, mail claim, then legion daily-rewards route. The command
+validates and calibrates the game window once before the first action, then
+preserves those bounds for all five phases.
 
-Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all three flows
+One failed click delivery is retried once after re-focusing the calibrated game
+window. If delivery still fails after a known phase entry, the helper uses only
+that phase's verified close/back path, records `recovered_failure`, and
+continues with later phases. It exits 0 with a truthful `daily rewards partial`
+summary in that case; partial means later free surfaces were attempted, not
+visual proof of every reward claim. Game-window, login, geometry, failed
+cleanup, and an ad that does not return to the calibrated game remain fatal and
+stop the command without speculative clicks.
+
+Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all five flows
 without focusing a game window, clicking, or sleeping. It retains the existing
 defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
 
 ## Free Red-Dot Surfaces
 
-- `日历`: open once, click visible safe gift with `calendar_gift`, confirm reward,
-  then dismiss and return with `calendar_close`. Use `calendar_top` to enter
+- `日历`: use `calendar-claim` to open once, click visible safe gift with
+  `calendar_gift`, dismiss the reward, and return with `calendar_close`. Use `calendar_top` to enter
   from the home page when the top calendar icon is visible. If a weekly/activity
   calendar close misses once, use a single Computer Use close click as recovery
   and treat the helper coordinate as needing recalibration before more fixed
@@ -219,9 +230,12 @@ defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
   `作战计划`, claim visible `签到` only when direct-free; stop if already checked.
   Fixed clicks available after a page gate: `pass_entry`, `pass_free_claim`,
   `work_plan_tab`, and `work_plan_sign`.
-- `福利`: claim only direct free `七日突围`-style rewards. Skip补签, ads, RMB,
-  diamonds, `每日特惠`, paid `免费宝箱`, task pages with only `前往`, and any
-  ambiguous commercial red dot.
+- `福利`: `welfare-claim` opens only the known `七日突围` welfare cluster,
+  dismisses its automatic free-reward popup with
+  `welfare_reward_popup_dismiss`, and returns with `back_bottom_left`. It
+  never clicks within the page. Skip补签, ads, RMB,
+  diamonds, `每日特惠`, paid `免费宝箱`, task pages with only `前往`, the
+  `每日充值` and `累计充值` tabs, and any ambiguous commercial red dot.
 
 ## Legion
 

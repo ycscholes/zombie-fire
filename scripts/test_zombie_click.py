@@ -144,8 +144,38 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertEqual(
             [call.args[0] for call in attempt.call_args_list],
-            ["cgclick"],
+            ["cgclick", "cgclick"],
         )
+
+    def test_perform_click_retries_one_delivery_failure_after_revalidating(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "focus_game_window") as focus,
+            patch.object(zombie_click, "ensure_unchanged_game_window") as verify,
+            patch.object(
+                zombie_click,
+                "try_click_backend",
+                side_effect=[(False, "unavailable"), (True, "")],
+            ) as dispatch,
+            patch.object(zombie_click, "wait_after_click"),
+        ):
+            self.assertEqual(zombie_click.perform_click(10, 20, "cgclick", bounds), "cgclick")
+
+        self.assertEqual(dispatch.call_count, 2)
+        self.assertEqual(focus.call_count, 2)
+        self.assertEqual(verify.call_count, 2)
+
+    def test_perform_click_does_not_repeat_a_successful_dispatch(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "try_click_backend", return_value=(True, "")) as dispatch,
+            patch.object(zombie_click, "wait_after_click"),
+        ):
+            zombie_click.perform_click(10, 20, "cgclick", bounds)
+
+        dispatch.assert_called_once_with("cgclick", 10, 20)
 
     def test_waits_are_reduced_by_one_second_with_a_half_second_floor(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
@@ -422,6 +452,34 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(clicks.count(reward_dismiss), 2)
         self.assertNotIn(ad_close_lower, clicks)
 
+    def test_post_ad_readiness_polls_until_the_calibrated_game_returns(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(
+                zombie_click,
+                "front_window_snapshot",
+                side_effect=[
+                    self.game_snapshot("广告"),
+                    self.game_snapshot("向僵尸开炮"),
+                ],
+            ),
+            patch.object(zombie_click.time, "monotonic", side_effect=[0.0, 0.2]),
+            patch.object(zombie_click.time, "sleep") as sleep,
+        ):
+            zombie_click.ensure_game_ready_after_ad(bounds, timeout=2.0, interval=0.2)
+
+        sleep.assert_called_once_with(0.2)
+
+    def test_post_ad_readiness_raises_typed_error_after_deadline(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "front_window_snapshot", return_value=self.game_snapshot("广告")),
+            patch.object(zombie_click.time, "monotonic", side_effect=[0.0, 2.1]),
+            patch.object(zombie_click.time, "sleep"),
+        ):
+            with self.assertRaises(zombie_click.AdReturnError):
+                zombie_click.ensure_game_ready_after_ad(bounds, timeout=2.0, interval=0.2)
+
     def test_focus_raises_and_accepts_the_game_window(self) -> None:
         with (
             patch.object(
@@ -494,7 +552,46 @@ class FocusEligibilityTests(unittest.TestCase):
     def test_daily_rewards_command_handler_is_available(self) -> None:
         self.assertTrue(hasattr(zombie_click, "command_daily_rewards"))
 
-    def test_daily_rewards_runs_the_three_phases_in_order_with_shared_bounds(self) -> None:
+    def test_calendar_claim_clicks_entry_gift_dismiss_and_close(self) -> None:
+        args = zombie_click.build_parser().parse_args(["calendar-claim"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        clicks: list[tuple[int, int]] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(
+                zombie_click,
+                "perform_click",
+                side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
+            ),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_calendar_claim(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(clicks, [point("calendar_top"), point("calendar_gift"), point("reward_dismiss"), point("calendar_close")])
+
+    def test_welfare_claim_clicks_only_free_popup_dismiss_and_back(self) -> None:
+        args = zombie_click.build_parser().parse_args(["welfare-claim"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        clicks: list[tuple[int, int]] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(
+                zombie_click,
+                "perform_click",
+                side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
+            ),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_welfare_claim(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            clicks,
+            [point("welfare_cluster"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
+        )
+
+    def test_daily_rewards_runs_the_five_phases_in_order_with_shared_bounds(self) -> None:
         args = argparse.Namespace(
             mock_bounds=None,
             fit=True,
@@ -513,6 +610,16 @@ class FocusEligibilityTests(unittest.TestCase):
             ),
             patch.object(
                 zombie_click,
+                "command_calendar_claim",
+                side_effect=lambda phase_args: phases.append(("calendar", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
+                "command_welfare_claim",
+                side_effect=lambda phase_args: phases.append(("welfare", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
                 "command_mail_claim",
                 side_effect=lambda phase_args: phases.append(("mail", phase_args.mock_bounds)),
             ),
@@ -524,19 +631,98 @@ class FocusEligibilityTests(unittest.TestCase):
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
-        self.assertEqual(phases, [("patrol", bounds), ("mail", bounds), ("legion", bounds)])
+        self.assertEqual(
+            phases,
+            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds)],
+        )
 
-    def test_daily_rewards_stops_after_a_failed_phase(self) -> None:
-        args = argparse.Namespace(mock_bounds=zombie_click.Bounds("MOCK", "mock", 2, 33, 508, 949), dry_run=True)
+    def test_daily_rewards_continues_after_a_recovered_calendar_failure(self) -> None:
+        args = argparse.Namespace(
+            mock_bounds=zombie_click.Bounds("MOCK", "mock", 2, 33, 508, 949),
+            dry_run=True,
+            backend="cgclick",
+        )
+        with (
+            patch.object(zombie_click, "command_patrol_full_from_home", return_value=0),
+            patch.object(
+                zombie_click,
+                "command_calendar_claim",
+                side_effect=zombie_click.ClickDeliveryError("calendar delivery failed"),
+            ),
+            patch.object(zombie_click, "recover_phase", return_value=None, create=True) as recover,
+            patch.object(zombie_click, "command_welfare_claim", return_value=0) as welfare,
+            patch.object(zombie_click, "command_mail_claim", return_value=0),
+            patch.object(zombie_click, "command_legion_daily_rewards", return_value=0),
+        ):
+            self.assertEqual(zombie_click.command_daily_rewards(args), 0)
+
+        recover.assert_called_once()
+        welfare.assert_called_once()
+
+    def test_daily_rewards_stops_after_window_state_failure(self) -> None:
+        args = argparse.Namespace(
+            mock_bounds=zombie_click.Bounds("MOCK", "mock", 2, 33, 508, 949),
+            dry_run=True,
+            backend="cgclick",
+        )
         with (
             patch.object(
                 zombie_click,
                 "command_patrol_full_from_home",
-                side_effect=zombie_click.ClickError("patrol blocked"),
+                side_effect=zombie_click.WindowStateError("wrong app"),
             ),
-            patch.object(zombie_click, "command_mail_claim") as mail_claim,
+            patch.object(zombie_click, "command_calendar_claim") as calendar,
         ):
-            with self.assertRaisesRegex(zombie_click.ClickError, "patrol blocked"):
+            with self.assertRaisesRegex(zombie_click.WindowStateError, "wrong app"):
                 zombie_click.command_daily_rewards(args)
 
-        mail_claim.assert_not_called()
+        calendar.assert_not_called()
+
+    def test_daily_rewards_reports_completed_and_skipped_phases_before_reraising_fatal_error(self) -> None:
+        args = argparse.Namespace(
+            mock_bounds=zombie_click.Bounds("MOCK", "mock", 2, 33, 508, 949),
+            dry_run=True,
+            backend="cgclick",
+        )
+        with (
+            patch.object(zombie_click, "command_patrol_full_from_home", return_value=0),
+            patch.object(
+                zombie_click,
+                "command_calendar_claim",
+                side_effect=zombie_click.WindowStateError("wrong app"),
+            ),
+            patch.object(zombie_click, "command_welfare_claim"),
+            patch.object(zombie_click, "command_mail_claim"),
+            patch.object(zombie_click, "command_legion_daily_rewards"),
+            patch("builtins.print") as print_mock,
+        ):
+            with self.assertRaisesRegex(zombie_click.WindowStateError, "wrong app"):
+                zombie_click.command_daily_rewards(args)
+
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list)
+        self.assertIn("patrol=completed", printed)
+        self.assertIn("calendar=fatal_failure", printed)
+        self.assertIn("welfare=skipped", printed)
+
+    def test_daily_rewards_prints_partial_when_a_phase_recovers(self) -> None:
+        args = argparse.Namespace(
+            mock_bounds=zombie_click.Bounds("MOCK", "mock", 2, 33, 508, 949),
+            dry_run=True,
+            backend="cgclick",
+        )
+        with (
+            patch.object(
+                zombie_click,
+                "command_patrol_full_from_home",
+                side_effect=zombie_click.ClickDeliveryError("delivery failed"),
+            ),
+            patch.object(zombie_click, "recover_phase", return_value=None),
+            patch.object(zombie_click, "command_calendar_claim", return_value=0),
+            patch.object(zombie_click, "command_welfare_claim", return_value=0),
+            patch.object(zombie_click, "command_mail_claim", return_value=0),
+            patch.object(zombie_click, "command_legion_daily_rewards", return_value=0),
+            patch("builtins.print") as print_mock,
+        ):
+            self.assertEqual(zombie_click.command_daily_rewards(args), 0)
+
+        self.assertTrue(any("daily rewards partial" in str(call.args[0]) for call in print_mock.call_args_list))

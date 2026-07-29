@@ -18,7 +18,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
+from typing import Callable, Dict, Iterable, Tuple
 
 
 BASE_WIDTH = 508
@@ -33,6 +33,8 @@ MIN_WAIT_SECONDS = 0.5
 # System Events can briefly stall while macOS switches application focus. Keep
 # this finite so a failed Accessibility dispatch stops the automation safely.
 SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS = 8.0
+POST_AD_READY_TIMEOUT_SECONDS = 8.0
+POST_AD_READY_POLL_SECONDS = 0.4
 CLICK_BACKENDS = ("auto", "cgclick", "quartz", "cliclick", "system-events")
 NON_OPERATING_COMMANDS = frozenset({"list", "state", "self-test", "dry-run"})
 WECHAT_NAMES = {"微信", "WeChat", "Weixin", "WeApp", "小程序"}
@@ -92,6 +94,7 @@ ACTIONS: Dict[str, Action] = {
     "mail_close": Action(425, 226, "mail page close button"),
     "mail_menu_dismiss": Action(250, 450, "safe home-center tap to dismiss the top-right menu"),
     "welfare_cluster": Action(428, 392, "right-side welfare/gift cluster"),
+    "welfare_reward_popup_dismiss": Action(250, 600, "dismiss the seven-day welfare free-reward popup"),
     "pass_entry": Action(430, 332, "right-side battle pass entry on home"),
     "pass_free_claim": Action(112, 837, "battle pass free one-click claim"),
     "work_plan_tab": Action(354, 902, "battle pass work-plan tab"),
@@ -143,6 +146,41 @@ class Bounds:
 
 class ClickError(RuntimeError):
     pass
+
+
+class WindowStateError(ClickError):
+    pass
+
+
+class ClickDeliveryError(ClickError):
+    pass
+
+
+class AdReturnError(WindowStateError):
+    pass
+
+
+class PhaseRecoveryError(WindowStateError):
+    pass
+
+
+@dataclass
+class PhaseProgress:
+    name: str
+    state: str = "not_entered"
+
+
+@dataclass(frozen=True)
+class PhaseResult:
+    name: str
+    status: str
+    error: str | None = None
+
+
+def set_phase_state(args: argparse.Namespace, state: str) -> None:
+    progress = getattr(args, "phase_progress", None)
+    if progress is not None:
+        progress.state = state
 
 
 def front_window_snapshot() -> Dict[str, object]:
@@ -321,11 +359,11 @@ def validate_bounds(bounds: Bounds, *, allow_mock: bool = False) -> None:
     if bounds.bundle_id == "mock" and allow_mock:
         return
     if not looks_like_wechat(bounds):
-        raise ClickError(f"front app is {bounds.app_name!r} ({bounds.bundle_id}), not WeChat/WeApp")
+        raise WindowStateError(f"front app is {bounds.app_name!r} ({bounds.bundle_id}), not WeChat/WeApp")
     if bounds.width < MIN_WIDTH or bounds.height < MIN_HEIGHT:
-        raise ClickError(f"window too small: {bounds.width}x{bounds.height}")
+        raise WindowStateError(f"window too small: {bounds.width}x{bounds.height}")
     if not (ASPECT_MIN <= bounds.aspect <= ASPECT_MAX):
-        raise ClickError(
+        raise WindowStateError(
             f"window aspect {bounds.aspect:.3f} outside expected range "
             f"{ASPECT_MIN:.2f}-{ASPECT_MAX:.2f}"
         )
@@ -351,7 +389,7 @@ def ensure_unchanged_game_window(expected: Bounds) -> None:
     snapshot = front_window_snapshot()
     status = classify_snapshot(snapshot)
     if status != "game_ready":
-        raise ClickError(
+        raise WindowStateError(
             "game window is not ready before click: "
             f"{status} title={snapshot.get('title')!r} "
             f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
@@ -372,15 +410,25 @@ def ensure_unchanged_game_window(expected: Bounds) -> None:
         )
 
 
-def ensure_game_ready_after_ad(expected: Bounds) -> None:
-    """Stop safely unless the closed ad returned to the calibrated game."""
-    try:
-        ensure_unchanged_game_window(expected)
-    except ClickError as exc:
-        raise ClickError(
-            "patrol ad did not return to the calibrated game window; "
-            "stop without trying ad_close_lower"
-        ) from exc
+def ensure_game_ready_after_ad(
+    expected: Bounds,
+    *,
+    timeout: float = POST_AD_READY_TIMEOUT_SECONDS,
+    interval: float = POST_AD_READY_POLL_SECONDS,
+) -> None:
+    """Wait briefly for a closed ad to return to the calibrated game window."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            ensure_unchanged_game_window(expected)
+            return
+        except WindowStateError as exc:
+            if time.monotonic() >= deadline:
+                raise AdReturnError(
+                    "patrol ad did not return to the calibrated game window; "
+                    "stop without trying ad_close_lower"
+                ) from exc
+            time.sleep(interval)
 
 
 def scale_point(action: Action, bounds: Bounds) -> Tuple[int, int]:
@@ -505,18 +553,19 @@ def perform_click(
     wait_after: bool = True,
 ) -> str:
     if expected_bounds is None:
-        raise ClickError("real clicks require calibrated game-window bounds")
-    focus_game_window(expected_bounds)
-    ensure_unchanged_game_window(expected_bounds)
+        raise ClickDeliveryError("real clicks require calibrated game-window bounds")
     failures = []
-    for candidate in click_backend_candidates(backend):
-        clicked, reason = try_click_backend(candidate, x, y)
-        if clicked:
-            if wait_after:
-                wait_after_click()
-            return candidate
-        failures.append(f"{candidate}: {reason}")
-    raise ClickError("click backend failed: " + "; ".join(failures))
+    for _attempt in range(2):
+        focus_game_window(expected_bounds)
+        ensure_unchanged_game_window(expected_bounds)
+        for candidate in click_backend_candidates(backend):
+            clicked, reason = try_click_backend(candidate, x, y)
+            if clicked:
+                if wait_after:
+                    wait_after_click()
+                return candidate
+            failures.append(f"{candidate}: {reason}")
+    raise ClickDeliveryError("click backend failed: " + "; ".join(failures))
 
 
 def sleep_between(seconds: float) -> None:
@@ -552,7 +601,7 @@ def focus_game_window(bounds: Bounds) -> None:
     """Focus the game immediately before a click and preserve calibration."""
     focused = focus_game_window_at_start(expected_bounds=bounds)
     if focused != bounds:
-        raise ClickError(
+        raise WindowStateError(
             "focused game window changed after calibration: "
             f"expected {bounds.x},{bounds.y} {bounds.width}x{bounds.height}; "
             f"got {focused.x},{focused.y} {focused.width}x{focused.height}"
@@ -621,7 +670,7 @@ error "向僵尸开炮 window not found"
     )
     title = str(snapshot["title"])
     if not looks_like_wechat(focused) or "向僵尸开炮" not in title:
-        raise ClickError(
+        raise WindowStateError(
             "game window did not become frontmost: "
             f"title={title!r} "
             f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
@@ -892,6 +941,7 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
         return 0
 
     backend = perform_click(*points["patrol_truck"], args.backend, bounds)
+    set_phase_state(args, "patrol_opened")
     print(f"patrol full: clicked patrol truck via {backend}", flush=True)
     sleep_between(args.panel_wait)
 
@@ -1030,9 +1080,11 @@ def command_mail_claim(args: argparse.Namespace) -> int:
         )
         return 0
     backend = perform_click(*points["right_menu"], args.backend, bounds)
+    set_phase_state(args, "mail_menu_opened")
     print(f"mail claim: clicked top-right menu via {backend}", flush=True)
     sleep_between(args.menu_wait)
     backend = perform_click(*points["mail_entry"], args.backend, bounds)
+    set_phase_state(args, "mail_opened")
     print(f"mail claim: clicked mail entry via {backend}", flush=True)
     sleep_between(args.open_wait)
     backend = perform_click(*points["mail_claim_all"], args.backend, bounds)
@@ -1048,8 +1100,114 @@ def command_mail_claim(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_calendar_claim(args: argparse.Namespace) -> int:
+    """Claim the calendar's visible free gift and return to the home page."""
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(
+        bounds,
+        "calendar_top",
+        "calendar_gift",
+        "reward_dismiss",
+        "calendar_close",
+    )
+    if args.dry_run:
+        print(
+            "calendar claim dry-run: "
+            f"open_wait={args.open_wait}, reward_wait={args.reward_wait}, points={points}"
+        )
+        return 0
+
+    backend = perform_click(*points["calendar_top"], args.backend, bounds)
+    set_phase_state(args, "calendar_opened")
+    print(f"calendar claim: opened calendar via {backend}", flush=True)
+    sleep_between(args.open_wait)
+    backend = perform_click(*points["calendar_gift"], args.backend, bounds)
+    print(f"calendar claim: clicked visible free gift via {backend}", flush=True)
+    sleep_between(args.reward_wait)
+    backend = perform_click(*points["reward_dismiss"], args.backend, bounds)
+    print(f"calendar claim: dismissed reward via {backend}", flush=True)
+    backend = perform_click(*points["calendar_close"], args.backend, bounds)
+    print(f"calendar claim complete: closed calendar via {backend}")
+    return 0
+
+
+def command_welfare_claim(args: argparse.Namespace) -> int:
+    """Claim the automatic free welfare popup and return without visiting recharge tabs."""
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(bounds, "welfare_cluster", "welfare_reward_popup_dismiss", "back_bottom_left")
+    if args.dry_run:
+        print(
+            "welfare claim dry-run: "
+            f"open_wait={args.open_wait}, reward_wait={args.reward_wait}, points={points}"
+        )
+        return 0
+
+    backend = perform_click(*points["welfare_cluster"], args.backend, bounds)
+    set_phase_state(args, "welfare_opened")
+    print(f"welfare claim: opened welfare cluster via {backend}", flush=True)
+    sleep_between(args.open_wait)
+    backend = perform_click(*points["welfare_reward_popup_dismiss"], args.backend, bounds)
+    print(f"welfare claim: dismissed automatic free reward via {backend}", flush=True)
+    sleep_between(args.reward_wait)
+    backend = perform_click(*points["back_bottom_left"], args.backend, bounds)
+    print(f"welfare claim complete: returned without visiting recharge tabs via {backend}")
+    return 0
+
+
+def recover_phase(progress: PhaseProgress, args: argparse.Namespace) -> None:
+    """Return a failed composite phase to its known safe boundary when possible."""
+    if progress.state == "not_entered" or args.dry_run:
+        return
+    bounds = args.mock_bounds
+    actions_by_state = {
+        "patrol_opened": ("patrol_close",),
+        "calendar_opened": ("calendar_close",),
+        "welfare_opened": ("back_bottom_left",),
+        "mail_menu_opened": ("mail_menu_dismiss",),
+        "mail_opened": ("mail_close", "mail_menu_dismiss"),
+        "legion_opened": (),
+        "legion_daily_cut_opened": ("legion_modal_close",),
+        "legion_foreign_challenge_opened": ("legion_foreign_challenge_back",),
+        "legion_rewards_opened": ("legion_reward_panel_close", "legion_foreign_challenge_back"),
+    }
+    try:
+        actions = actions_by_state.get(progress.state)
+        if actions is None:
+            raise PhaseRecoveryError(f"{progress.name} has no safe recovery from {progress.state}")
+        ensure_unchanged_game_window(bounds)
+        for action in actions:
+            x, y = scale_point(ACTIONS[action], bounds)
+            perform_click(x, y, args.backend, bounds)
+    except ClickError as exc:
+        raise PhaseRecoveryError(f"{progress.name} recovery failed from {progress.state}: {exc}") from exc
+
+
+def run_daily_phase(
+    name: str,
+    handler: Callable[[argparse.Namespace], int],
+    args: argparse.Namespace,
+) -> PhaseResult:
+    progress = PhaseProgress(name)
+    args.phase_progress = progress
+    try:
+        handler(args)
+        return PhaseResult(name, "completed")
+    except ClickDeliveryError as exc:
+        recover_phase(progress, args)
+        return PhaseResult(name, "recovered_failure", str(exc))
+
+
+def print_daily_summary(results: list[PhaseResult]) -> None:
+    status = "partial" if any(result.status == "recovered_failure" for result in results) else "complete"
+    rendered = ", ".join(
+        f"{result.name}={result.status}" + (f" ({result.error})" if result.error else "")
+        for result in results
+    )
+    print(f"daily rewards {status}: {rendered}")
+
+
 def command_daily_rewards(args: argparse.Namespace) -> int:
-    """Run patrol, mail, and legion daily rewards against one checked window."""
+    """Run patrol, calendar, welfare, mail, and legion rewards against one checked window."""
     if args.mock_bounds:
         bounds = get_bounds(args)
         validate_bounds(bounds, allow_mock=True)
@@ -1057,7 +1215,7 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         snapshot = front_window_snapshot()
         status = classify_snapshot(snapshot)
         if status != "game_ready":
-            raise ClickError(
+            raise WindowStateError(
                 "game window is not ready: "
                 f"{status} title={snapshot.get('title')!r} "
                 f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
@@ -1092,13 +1250,24 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
     }
     phase_args = argparse.Namespace(**phase_values)
 
-    print("daily rewards: starting patrol", flush=True)
-    command_patrol_full_from_home(phase_args)
-    print("daily rewards: starting mail", flush=True)
-    command_mail_claim(phase_args)
-    print("daily rewards: starting legion", flush=True)
-    command_legion_daily_rewards(phase_args)
-    print("daily rewards complete: attempted patrol, mail, and legion rewards")
+    phases: tuple[tuple[str, Callable[[argparse.Namespace], int]], ...] = (
+        ("patrol", command_patrol_full_from_home),
+        ("calendar", command_calendar_claim),
+        ("welfare", command_welfare_claim),
+        ("mail", command_mail_claim),
+        ("legion", command_legion_daily_rewards),
+    )
+    results: list[PhaseResult] = []
+    for index, (name, handler) in enumerate(phases):
+        print(f"daily rewards: starting {name}", flush=True)
+        try:
+            results.append(run_daily_phase(name, handler, phase_args))
+        except ClickError as exc:
+            results.append(PhaseResult(name, "fatal_failure", str(exc)))
+            results.extend(PhaseResult(skipped_name, "skipped") for skipped_name, _ in phases[index + 1 :])
+            print_daily_summary(results)
+            raise
+    print_daily_summary(results)
     return 0
 
 
@@ -1139,8 +1308,10 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         return 0
 
     backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    set_phase_state(args, "legion_opened")
     print(f"legion daily rewards: clicked legion tab via {backend}", flush=True)
     backend = perform_click(*points["legion_daily_cut"], args.backend, bounds)
+    set_phase_state(args, "legion_daily_cut_opened")
     print(f"legion daily rewards: opened daily cut via {backend}", flush=True)
     backend = perform_click(*points["legion_cut_once"], args.backend, bounds)
     print(f"legion daily rewards: clicked daily cut once via {backend}", flush=True)
@@ -1160,6 +1331,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
             sweep_between=args.sweep_between,
             reward_page_wait=args.reward_page_wait,
             reward_wait=args.reward_wait,
+            phase_progress=getattr(args, "phase_progress", None),
         )
     )
     print("legion daily rewards complete: attempted daily cut and full foreign-challenge rewards")
@@ -1195,8 +1367,10 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         )
         return 0
     backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    set_phase_state(args, "legion_opened")
     print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
     backend = perform_click(*points["legion_foreign_challenge"], args.backend, bounds)
+    set_phase_state(args, "legion_foreign_challenge_opened")
     print(f"legion reward claims: clicked foreign challenge via {backend}", flush=True)
     run_repeated_click_flow(
         points={
@@ -1225,6 +1399,8 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         ("legion_foreign_challenge_back", "returned to legion", 0),
     ):
         backend = perform_click(*points[action], args.backend, bounds)
+        if action == "legion_reward_left":
+            set_phase_state(args, "legion_rewards_opened")
         print(f"legion reward claims: {message} via {backend}", flush=True)
         if wait:
             sleep_between(wait)
@@ -1385,9 +1561,29 @@ def build_parser() -> argparse.ArgumentParser:
     mail_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     mail_parser.set_defaults(func=command_mail_claim)
 
+    calendar_parser = sub.add_parser(
+        "calendar-claim",
+        help="open calendar, claim its visible free gift, dismiss the reward, and close",
+    )
+    calendar_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
+    calendar_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    calendar_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    calendar_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    calendar_parser.set_defaults(func=command_calendar_claim)
+
+    welfare_parser = sub.add_parser(
+        "welfare-claim",
+        help="open welfare, dismiss only its automatic free reward, and return without recharge tabs",
+    )
+    welfare_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
+    welfare_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    welfare_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    welfare_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    welfare_parser.set_defaults(func=command_welfare_claim)
+
     daily_parser = sub.add_parser(
         "daily-rewards",
-        help="run patrol, mail, and legion daily rewards with one checked game window",
+        help="run patrol, calendar, welfare, mail, and legion daily rewards with one checked game window",
     )
     daily_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
     daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
