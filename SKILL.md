@@ -18,6 +18,7 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py clic
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-full-from-home
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 2,33,508,949 patrol-full-from-home --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards --from-step 3
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 2,33,508,949 daily-rewards --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-quick-batch --times 3
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-batch
@@ -35,13 +36,17 @@ The helper maps the normal `508x949` Computer Use coordinate space to the
 current front WeChat window. It aborts when the front app, window size, or
 aspect ratio does not look like the game window.
 
-Every helper click waits a random `1.5` to `2.5` seconds before the next helper
+Every helper click waits a random `0.5` to `1.0` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
+Reward-popup dismiss clicks use a fixed 1-second wait after dismissal before
+the next operation.
 
-By default, the helper uses the persistent CoreGraphics `cgclick` helper for
-click delivery. `System Events` is explicit-only (`--backend system-events`),
-waits up to 8 seconds for its Accessibility dispatch, and cannot produce
-`system-events click timed out` on the default patrol path.
+Every click backend uses the same complete tap semantics: move to the target,
+press, hold for 80 ms, then release with click-state `1`. By default, the
+helper uses the persistent CoreGraphics `cgclick` helper. The legacy
+`--backend system-events` selector is retained for compatibility but delegates
+to that same complete CoreGraphics tap because System Events only exposes an
+atomic click action.
 
 ## Operating Mode
 
@@ -160,8 +165,8 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patr
 This command performs the whole patrol routine without screenshots: it checks
 the calibrated game-window bounds, fits the window to the calibrated
 `508x949` geometry, opens the patrol truck, attempts patrol income, runs normal
-quick patrol 3 times, runs patrol ad rewards 5 times, dismisses reward popups
-with redundant safe taps, and closes the patrol panel.
+quick patrol 3 times, runs patrol ad rewards 5 times, dismisses each reward
+popup with one safe tap, and closes the patrol panel.
 
 Use `--quick-times N` or `--ad-times N` only when the user explicitly asks for a
 non-default count. Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect
@@ -189,9 +194,17 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py dail
 ```
 
 It performs the complete patrol route, calendar free-gift claim, welfare free
-reward dismissal, mail claim, then legion daily-rewards route. The command
+reward dismissal, mail claim, legion daily-rewards route, then the Journey
+gold/wood resource claim. The command
 validates and calibrates the game window once before the first action, then
-preserves those bounds for all five phases.
+preserves those bounds for all six phases.
+
+To resume a new run after a prior phase was recovered or stopped, pass
+`--from-step N`: `1=patrol`, `2=calendar`, `3=welfare`, `4=mail`, `5=legion`,
+and `6=journey`. It marks earlier phases as `skipped`, then performs the usual
+focus and calibration before the selected phase. It never infers prior progress
+or resumes a phase-internal click; choose a phase only after returning to its
+known safe boundary.
 
 One failed click delivery is retried once after re-focusing the calibrated game
 window. If delivery still fails after a known phase entry, the helper uses only
@@ -202,7 +215,7 @@ visual proof of every reward claim. Game-window, login, geometry, failed
 cleanup, and an ad that does not return to the calibrated game remain fatal and
 stop the command without speculative clicks.
 
-Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all five flows
+Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all six flows
 without focusing a game window, clicking, or sleeping. It retains the existing
 defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
 
@@ -283,8 +296,10 @@ attempt -> `异域挑战` sweep -> visible reward rows.
 
 ## Journey
 
-Only run when explicitly requested or re-enabled. Current status: journey clicks
-are unreliable.
+The combined `daily-rewards` command runs this as step 6. The route remains
+conservative because journey clicks can be unreliable: collect only the visible
+gold and wood bubbles, dismiss each resulting reward popup, and stop on any
+unexpected state.
 
 - Count a resource collection only if a centered `恭喜` reward popup appears.
 - After a fresh capture, target one visible resource bubble and stop after the

@@ -113,19 +113,92 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(zombie_click.ACTIONS["legion_modal_close"].x, 425)
         self.assertEqual(zombie_click.ACTIONS["legion_modal_close"].y, 228)
 
+    def test_journey_resource_claim_opens_journey_then_claims_gold_and_wood_once(self) -> None:
+        args = zombie_click.build_parser().parse_args(["journey-resource-claim"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        clicks: list[tuple[int, int]] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(
+                zombie_click,
+                "perform_click",
+                side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
+            ),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_journey_resource_claim(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            clicks,
+            [
+                point("journey_tab"),
+                point("journey_gold_claim"),
+                point("reward_dismiss"),
+                point("journey_wood_claim"),
+                point("reward_dismiss"),
+            ],
+        )
+
+    def test_journey_resource_targets_remain_at_the_visible_bubble_centers(self) -> None:
+        self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 368)
+        self.assertEqual(zombie_click.ACTIONS["journey_wood_claim"].x, 229)
+
+    def test_cgclick_emits_a_complete_tap_sequence(self) -> None:
+        self.assertIn("kCGEventMouseMoved", zombie_click.CGCLICK_SOURCE)
+        self.assertIn("kCGMouseEventClickState", zombie_click.CGCLICK_SOURCE)
+        self.assertIn("usleep(80000)", zombie_click.CGCLICK_SOURCE)
+
     def test_legion_sweep_confirmation_uses_the_verified_confirm_and_cancel_points(self) -> None:
         self.assertEqual((zombie_click.ACTIONS["legion_sweep_cancel"].x, zombie_click.ACTIONS["legion_sweep_cancel"].y), (187, 579))
         self.assertEqual((zombie_click.ACTIONS["legion_sweep_confirm"].x, zombie_click.ACTIONS["legion_sweep_confirm"].y), (321, 579))
         self.assertEqual((zombie_click.ACTIONS["legion_reward_popup_dismiss"].x, zombie_click.ACTIONS["legion_reward_popup_dismiss"].y), (250, 600))
 
-    def test_system_events_click_uses_named_finite_timeout(self) -> None:
-        with patch.object(zombie_click.subprocess, "run") as run:
-            run.return_value = Mock(returncode=0, stdout="", stderr="")
+    def test_quartz_emits_the_complete_tap_sequence(self) -> None:
+        quartz = Mock(
+            kCGEventSourceStateHIDSystemState="source-state",
+            kCGEventMouseMoved="move",
+            kCGEventLeftMouseDown="down",
+            kCGEventLeftMouseUp="up",
+            kCGMouseButtonLeft="left",
+            kCGMouseEventClickState="click-state",
+            kCGHIDEventTap="hid-tap",
+        )
+        quartz.CGEventCreateMouseEvent.side_effect = ["move-event", "down-event", "up-event"]
+        with patch.dict(sys.modules, {"Quartz": quartz}), patch.object(zombie_click.time, "sleep") as sleep:
+            self.assertTrue(zombie_click.click_quartz(10, 20))
 
+        self.assertEqual(quartz.CGEventPost.call_args_list[0].args, ("hid-tap", "move-event"))
+        self.assertEqual(quartz.CGEventPost.call_args_list[1].args, ("hid-tap", "down-event"))
+        self.assertEqual(quartz.CGEventPost.call_args_list[2].args, ("hid-tap", "up-event"))
+        self.assertEqual(sleep.call_args.args, (zombie_click.CLICK_HOLD_SECONDS,))
+
+    def test_cliclick_emits_the_complete_tap_sequence(self) -> None:
+        with (
+            patch.object(zombie_click.shutil, "which", return_value="/usr/local/bin/cliclick"),
+            patch.object(zombie_click.subprocess, "run") as run,
+        ):
+            self.assertTrue(zombie_click.click_cliclick(10, 20))
+
+        self.assertEqual(
+            run.call_args.args[0],
+            ["/usr/local/bin/cliclick", "m:10,20", "dd:10,20", "w:80", "du:10,20"],
+        )
+
+    def test_system_events_backend_uses_the_complete_cgclick_tap(self) -> None:
+        with patch.object(zombie_click, "click_cgclick_bin", return_value=True) as click:
             self.assertTrue(zombie_click.click_system_events(10, 20))
 
-        self.assertEqual(zombie_click.SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS, 8.0)
-        self.assertEqual(run.call_args.kwargs["timeout"], zombie_click.SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS)
+        click.assert_called_once_with(10, 20)
+
+    def test_window_focus_osascript_times_out_instead_of_hanging(self) -> None:
+        with patch.object(
+            zombie_click.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(["osascript"], 8.0),
+        ):
+            with self.assertRaisesRegex(zombie_click.ClickError, "window-focus osascript timed out"):
+                zombie_click.run_osascript('tell application "System Events" to return "ok"')
 
     def test_auto_does_not_try_system_events_after_cgclick_failure(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -165,6 +238,31 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(focus.call_count, 2)
         self.assertEqual(verify.call_count, 2)
 
+    def test_retry_refocuses_and_revalidates_before_its_second_dispatch(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[str] = []
+        with (
+            patch.object(
+                zombie_click,
+                "focus_game_window",
+                side_effect=lambda _: events.append("focus"),
+            ),
+            patch.object(
+                zombie_click,
+                "ensure_unchanged_game_window",
+                side_effect=lambda _: events.append("verify"),
+            ),
+            patch.object(
+                zombie_click,
+                "try_click_backend",
+                side_effect=[(False, "unavailable"), (True, "")],
+            ),
+            patch.object(zombie_click, "wait_after_click"),
+        ):
+            zombie_click.perform_click(10, 20, "cgclick", bounds)
+
+        self.assertEqual(events, ["focus", "verify", "focus", "verify"])
+
     def test_perform_click_does_not_repeat_a_successful_dispatch(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         with (
@@ -177,7 +275,18 @@ class FocusEligibilityTests(unittest.TestCase):
 
         dispatch.assert_called_once_with("cgclick", 10, 20)
 
-    def test_waits_are_reduced_by_one_second_with_a_half_second_floor(self) -> None:
+    def test_perform_dismiss_click_waits_one_second_after_dismissal(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
+            patch.object(zombie_click.time, "sleep") as sleep,
+        ):
+            self.assertEqual(zombie_click.perform_dismiss_click(10, 20, "cgclick", bounds), "cgclick")
+
+        click.assert_called_once_with(10, 20, "cgclick", bounds, False)
+        sleep.assert_called_once_with(1.0)
+
+    def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
             zombie_click.sleep_between(3.0)
             zombie_click.sleep_between(1.0)
@@ -186,26 +295,24 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(sleep.call_args_list[0].args, (2.0,))
         self.assertEqual(sleep.call_args_list[1].args, (0.5,))
         post_click_wait = sleep.call_args_list[2].args[0]
-        self.assertGreaterEqual(post_click_wait, 1.5)
-        self.assertLessEqual(post_click_wait, 2.5)
+        self.assertGreaterEqual(post_click_wait, 0.5)
+        self.assertLessEqual(post_click_wait, 1.0)
 
-    def test_repeated_reward_dismiss_waits_exactly_one_second_before_the_second_tap(self) -> None:
+    def test_reward_dismiss_clicks_once_and_waits_one_second(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         points = {"reward_dismiss": (252, 853)}
         with (
             patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
             patch.object(zombie_click.time, "sleep") as sleep,
         ):
-            zombie_click.dismiss_reward_twice(
+            zombie_click.dismiss_reward_once(
                 points,
                 "cgclick",
                 bounds,
-                wait=1.0,
                 label="test reward",
             )
 
-        self.assertEqual(click.call_args_list[0].args, (252, 853, "cgclick", bounds, False))
-        self.assertEqual(click.call_args_list[1].args, (252, 853, "cgclick", bounds))
+        click.assert_called_once_with(252, 853, "cgclick", bounds, False)
         sleep.assert_called_once_with(1.0)
 
     def test_each_real_click_refocuses_before_verifying_and_dispatching(self) -> None:
@@ -312,15 +419,6 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(delegated.reward_page_wait, args.reward_page_wait)
         self.assertEqual(delegated.reward_wait, args.reward_wait)
 
-    def test_system_events_timeout_raises_click_error(self) -> None:
-        with patch.object(
-            zombie_click.subprocess,
-            "run",
-            side_effect=subprocess.TimeoutExpired(["osascript"], zombie_click.SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS),
-        ):
-            with self.assertRaisesRegex(zombie_click.ClickError, "system-events click timed out"):
-                zombie_click.click_system_events(10, 20)
-
     def test_cgclick_cache_paths_are_stable(self) -> None:
         self.assertEqual(zombie_click.CGCLICK_BIN_PATH.parent, zombie_click.CGCLICK_CACHE_DIR)
         self.assertEqual(zombie_click.CGCLICK_BIN_PATH.name, "zombie_cgclick")
@@ -392,7 +490,7 @@ class FocusEligibilityTests(unittest.TestCase):
             if event == ("click", *zombie_click.scale_point(zombie_click.ACTIONS["reward_dismiss"], bounds))
         )
         self.assertLess(ready, first_reward_dismiss_after_ready)
-        self.assertEqual(click.call_count, 9)
+        self.assertEqual(click.call_count, 7)
 
     def test_patrol_ad_readiness_failure_stops_before_reward_dismiss(self) -> None:
         args = zombie_click.build_parser().parse_args(
@@ -449,7 +547,7 @@ class FocusEligibilityTests(unittest.TestCase):
 
         reward_dismiss = zombie_click.scale_point(zombie_click.ACTIONS["reward_dismiss"], bounds)
         ad_close_lower = zombie_click.scale_point(zombie_click.ACTIONS["ad_close_lower"], bounds)
-        self.assertEqual(clicks.count(reward_dismiss), 2)
+        self.assertEqual(clicks.count(reward_dismiss), 1)
         self.assertNotIn(ad_close_lower, clicks)
 
     def test_post_ad_readiness_polls_until_the_calibrated_game_returns(self) -> None:
@@ -591,7 +689,7 @@ class FocusEligibilityTests(unittest.TestCase):
             [point("welfare_cluster"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
         )
 
-    def test_daily_rewards_runs_the_five_phases_in_order_with_shared_bounds(self) -> None:
+    def test_daily_rewards_runs_all_six_phases_in_order_with_shared_bounds(self) -> None:
         args = argparse.Namespace(
             mock_bounds=None,
             fit=True,
@@ -628,13 +726,66 @@ class FocusEligibilityTests(unittest.TestCase):
                 "command_legion_daily_rewards",
                 side_effect=lambda phase_args: phases.append(("legion", phase_args.mock_bounds)),
             ),
+            patch.object(
+                zombie_click,
+                "command_journey_resource_claim",
+                side_effect=lambda phase_args: phases.append(("journey", phase_args.mock_bounds)),
+            ),
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
         self.assertEqual(
             phases,
-            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds)],
+            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds)],
         )
+
+    def test_daily_rewards_from_step_three_skips_patrol_and_calendar(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "daily-rewards", "--from-step", "3", "--dry-run"]
+        )
+        phases: list[str] = []
+        with (
+            patch.object(zombie_click, "command_patrol_full_from_home") as patrol,
+            patch.object(zombie_click, "command_calendar_claim") as calendar,
+            patch.object(
+                zombie_click,
+                "command_welfare_claim",
+                side_effect=lambda _: phases.append("welfare"),
+            ),
+            patch.object(
+                zombie_click,
+                "command_mail_claim",
+                side_effect=lambda _: phases.append("mail"),
+            ),
+            patch.object(
+                zombie_click,
+                "command_legion_daily_rewards",
+                side_effect=lambda _: phases.append("legion"),
+            ),
+            patch.object(
+                zombie_click,
+                "command_journey_resource_claim",
+                side_effect=lambda _: phases.append("journey"),
+            ),
+            patch("builtins.print") as print_mock,
+        ):
+            self.assertEqual(zombie_click.command_daily_rewards(args), 0)
+
+        patrol.assert_not_called()
+        calendar.assert_not_called()
+        self.assertEqual(phases, ["welfare", "mail", "legion", "journey"])
+        summary = "\n".join(str(call.args[0]) for call in print_mock.call_args_list)
+        self.assertIn("patrol=skipped", summary)
+        self.assertIn("calendar=skipped", summary)
+
+    def test_daily_rewards_from_step_defaults_to_one(self) -> None:
+        args = zombie_click.build_parser().parse_args(["daily-rewards"])
+        self.assertEqual(args.from_step, 1)
+
+    def test_daily_rewards_from_step_rejects_out_of_range_values(self) -> None:
+        for value in ("0", "7"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                zombie_click.build_parser().parse_args(["daily-rewards", "--from-step", value])
 
     def test_daily_rewards_continues_after_a_recovered_calendar_failure(self) -> None:
         args = argparse.Namespace(

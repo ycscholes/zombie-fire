@@ -27,12 +27,14 @@ MIN_WIDTH = 420
 MIN_HEIGHT = 760
 ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
-POST_CLICK_WAIT_MIN = 1.5
-POST_CLICK_WAIT_MAX = 2.5
+# Keep a short randomized pause between helper clicks.
+POST_CLICK_WAIT_MIN = 0.5
+POST_CLICK_WAIT_MAX = 1.0
+DISMISS_POST_WAIT_SECONDS = 1.0
 MIN_WAIT_SECONDS = 0.5
-# System Events can briefly stall while macOS switches application focus. Keep
-# this finite so a failed Accessibility dispatch stops the automation safely.
-SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS = 8.0
+CLICK_HOLD_SECONDS = 0.08
+CLICK_HOLD_MILLISECONDS = 80
+WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
 POST_AD_READY_TIMEOUT_SECONDS = 8.0
 POST_AD_READY_POLL_SECONDS = 0.4
 CLICK_BACKENDS = ("auto", "cgclick", "quartz", "cliclick", "system-events")
@@ -48,6 +50,7 @@ CGCLICK_SOURCE = r"""
 #include <ApplicationServices/ApplicationServices.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 int main(int argc, char **argv) {
   if (argc != 3) { fprintf(stderr, "usage: zombie_cgclick x y\n"); return 2; }
   double x = atof(argv[1]);
@@ -55,11 +58,17 @@ int main(int argc, char **argv) {
   CGPoint p = CGPointMake(x, y);
   CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
   if (!src) return 3;
+  CGEventRef move = CGEventCreateMouseEvent(src, kCGEventMouseMoved, p, kCGMouseButtonLeft);
   CGEventRef down = CGEventCreateMouseEvent(src, kCGEventLeftMouseDown, p, kCGMouseButtonLeft);
   CGEventRef up = CGEventCreateMouseEvent(src, kCGEventLeftMouseUp, p, kCGMouseButtonLeft);
-  if (!down || !up) return 4;
+  if (!move || !down || !up) return 4;
+  CGEventSetIntegerValueField(down, kCGMouseEventClickState, 1);
+  CGEventSetIntegerValueField(up, kCGMouseEventClickState, 1);
+  CGEventPost(kCGHIDEventTap, move);
   CGEventPost(kCGHIDEventTap, down);
+  usleep(80000);
   CGEventPost(kCGHIDEventTap, up);
+  CFRelease(move);
   CFRelease(down);
   CFRelease(up);
   CFRelease(src);
@@ -101,6 +110,9 @@ ACTIONS: Dict[str, Action] = {
     "work_plan_sign": Action(387, 844, "work-plan free sign-in button"),
     "battle_tab": Action(250, 900, "bottom battle tab"),
     "legion_tab": Action(367, 900, "bottom legion tab"),
+    "journey_tab": Action(404, 900, "bottom journey tab"),
+    "journey_gold_claim": Action(368, 444, "visible journey gold resource bubble"),
+    "journey_wood_claim": Action(229, 544, "visible journey wood resource bubble"),
     "legion_daily_cut": Action(282, 548, "legion daily-cut entry"),
     "legion_cut_once": Action(254, 797, "free daily-cut button before it becomes a diamond cost"),
     "legion_foreign_challenge": Action(121, 356, "legion foreign challenge entry"),
@@ -259,13 +271,17 @@ def parse_bounds(raw: str) -> Bounds:
 
 
 def run_osascript(script: str) -> str:
-    proc = subprocess.run(
-        ["osascript", "-e", script],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=WINDOW_FOCUS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ClickError("window-focus osascript timed out") from exc
     if proc.returncode != 0:
         raise ClickError(proc.stderr.strip() or proc.stdout.strip() or "osascript failed")
     return proc.stdout.strip()
@@ -447,9 +463,16 @@ def click_quartz(x: int, y: int) -> bool:
     except Exception:
         return False
     source = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
+    move = Quartz.CGEventCreateMouseEvent(source, Quartz.kCGEventMouseMoved, (x, y), Quartz.kCGMouseButtonLeft)
     down = Quartz.CGEventCreateMouseEvent(source, Quartz.kCGEventLeftMouseDown, (x, y), Quartz.kCGMouseButtonLeft)
     up = Quartz.CGEventCreateMouseEvent(source, Quartz.kCGEventLeftMouseUp, (x, y), Quartz.kCGMouseButtonLeft)
+    if not move or not down or not up:
+        return False
+    Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventClickState, 1)
+    Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventClickState, 1)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, move)
     Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    time.sleep(CLICK_HOLD_SECONDS)
     Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
     return True
 
@@ -458,15 +481,22 @@ def click_cliclick(x: int, y: int) -> bool:
     binary = shutil.which("cliclick")
     if not binary:
         return False
-    subprocess.run([binary, f"c:{x},{y}"], check=True)
+    subprocess.run(
+        [binary, f"m:{x},{y}", f"dd:{x},{y}", f"w:{CLICK_HOLD_MILLISECONDS}", f"du:{x},{y}"],
+        check=True,
+    )
     return True
 
 
 def ensure_cgclick() -> bool:
     global CGCLICK_BIN
-    if CGCLICK_BIN and os.path.exists(CGCLICK_BIN) and os.access(CGCLICK_BIN, os.X_OK):
+    source_matches = (
+        CGCLICK_SOURCE_PATH.exists()
+        and CGCLICK_SOURCE_PATH.read_text(encoding="utf-8") == CGCLICK_SOURCE
+    )
+    if CGCLICK_BIN and source_matches and os.path.exists(CGCLICK_BIN) and os.access(CGCLICK_BIN, os.X_OK):
         return True
-    if CGCLICK_BIN_PATH.exists() and os.access(CGCLICK_BIN_PATH, os.X_OK):
+    if source_matches and CGCLICK_BIN_PATH.exists() and os.access(CGCLICK_BIN_PATH, os.X_OK):
         CGCLICK_BIN = str(CGCLICK_BIN_PATH)
         return True
     CGCLICK_CACHE_DIR.mkdir(mode=0o700, exist_ok=True)
@@ -500,21 +530,9 @@ def click_cgclick_bin(x: int, y: int) -> bool:
 
 
 def click_system_events(x: int, y: int) -> bool:
-    script = f'tell application "System Events" to click at {{{x}, {y}}}'
-    try:
-        proc = subprocess.run(
-            ["osascript", "-e", script],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=SYSTEM_EVENTS_CLICK_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise ClickError("system-events click timed out") from exc
-    if proc.returncode != 0:
-        raise ClickError(proc.stderr.strip() or proc.stdout.strip() or "system-events click failed")
-    return True
+    # System Events exposes only an atomic `click at` action. Route its legacy
+    # selector to cgclick so every real delivery has move/down/hold/up semantics.
+    return click_cgclick_bin(x, y)
 
 
 def wait_after_click() -> None:
@@ -556,7 +574,9 @@ def perform_click(
         raise ClickDeliveryError("real clicks require calibrated game-window bounds")
     failures = []
     for _attempt in range(2):
+        # 每次投递前重新聚焦游戏；弹窗或广告可能在两次操作之间抢走焦点。
         focus_game_window(expected_bounds)
+        # 聚焦后仍须确认校准窗口未移动或缩放，避免固定坐标误点。
         ensure_unchanged_game_window(expected_bounds)
         for candidate in click_backend_candidates(backend):
             clicked, reason = try_click_backend(candidate, x, y)
@@ -566,6 +586,18 @@ def perform_click(
                 return candidate
             failures.append(f"{candidate}: {reason}")
     raise ClickDeliveryError("click backend failed: " + "; ".join(failures))
+
+
+def perform_dismiss_click(
+    x: int,
+    y: int,
+    backend: str,
+    expected_bounds: Bounds,
+) -> str:
+    """Dismiss a reward popup and wait exactly one second before continuing."""
+    selected_backend = perform_click(x, y, backend, expected_bounds, False)
+    time.sleep(DISMISS_POST_WAIT_SECONDS)
+    return selected_backend
 
 
 def sleep_between(seconds: float) -> None:
@@ -585,7 +617,8 @@ def run_repeated_click_flow(
     backend = ""
     for index in range(count):
         for action_name, message, wait in steps:
-            backend = perform_click(*points[action_name], backend_name, bounds)
+            click = perform_dismiss_click if "dismiss" in action_name else perform_click
+            backend = click(*points[action_name], backend_name, bounds)
             print(
                 message.format(index=index + 1, count=count, backend=backend),
                 flush=True,
@@ -869,21 +902,19 @@ def patrol_full_points(bounds: Bounds) -> Dict[str, Tuple[int, int]]:
     )
 
 
-def dismiss_reward_twice(
+def dismiss_reward_once(
     points: Dict[str, Tuple[int, int]],
     backend_name: str,
     bounds: Bounds,
     *,
-    wait: float,
     label: str,
 ) -> str:
-    backend = perform_click(*points["reward_dismiss"], backend_name, bounds, False)
-    print(f"{label}: clicked reward-dismiss 1/2 via {backend}", flush=True)
-    # The first tap suppresses the global post-click wait, so preserve the
-    # caller's requested delay exactly instead of applying its compensation.
-    time.sleep(wait)
-    backend = perform_click(*points["reward_dismiss"], backend_name, bounds)
-    print(f"{label}: clicked reward-dismiss 2/2 via {backend}", flush=True)
+    # 奖励弹窗关闭后不再补点同一坐标，避免第二击落到已恢复的游戏页面。
+    backend = perform_dismiss_click(*points["reward_dismiss"], backend_name, bounds)
+    print(f"{label}: clicked reward-dismiss once via {backend}", flush=True)
+    # 旧的冗余第二次点击保留作校准记录；如日后弹窗行为变化，可据此恢复。
+    # backend = perform_click(*points["reward_dismiss"], backend_name, bounds)
+    # print(f"{label}: clicked reward-dismiss 2/2 via {backend}", flush=True)
     return backend
 
 
@@ -948,18 +979,17 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
     backend = perform_click(*points["patrol_claim"], args.backend, bounds)
     print(f"patrol full: clicked patrol claim via {backend}", flush=True)
     sleep_between(args.claim_wait)
-    backend = dismiss_reward_twice(points, args.backend, bounds, wait=args.dismiss_wait, label="patrol full claim")
+    backend = dismiss_reward_once(points, args.backend, bounds, label="patrol full claim")
     sleep_between(args.quick_between)
 
     for idx in range(args.quick_times):
         backend = perform_click(*points["quick_patrol"], args.backend, bounds)
         print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
         sleep_between(args.quick_reward_wait)
-        backend = dismiss_reward_twice(
+        backend = dismiss_reward_once(
             points,
             args.backend,
             bounds,
-            wait=args.dismiss_wait,
             label=f"patrol full quick {idx + 1}/{args.quick_times}",
         )
         if idx + 1 < args.quick_times:
@@ -975,11 +1005,10 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
         sleep_between(args.ad_close_wait)
         sleep_between(args.ad_reward_wait)
         ensure_game_ready_after_ad(bounds)
-        backend = dismiss_reward_twice(
+        backend = dismiss_reward_once(
             points,
             args.backend,
             bounds,
-            wait=args.dismiss_wait,
             label=f"patrol full ad {idx + 1}/{args.ad_times}",
         )
         if idx + 1 < args.ad_times:
@@ -1090,7 +1119,7 @@ def command_mail_claim(args: argparse.Namespace) -> int:
     backend = perform_click(*points["mail_claim_all"], args.backend, bounds)
     print(f"mail claim: clicked one-click claim via {backend}", flush=True)
     sleep_between(args.reward_wait)
-    backend = perform_click(*points["mail_reward_popup_dismiss"], args.backend, bounds)
+    backend = perform_dismiss_click(*points["mail_reward_popup_dismiss"], args.backend, bounds)
     print(f"mail claim: clicked reward-dismiss via {backend}", flush=True)
     backend = perform_click(*points["mail_close"], args.backend, bounds)
     print(f"mail claim: clicked close via {backend}", flush=True)
@@ -1124,7 +1153,7 @@ def command_calendar_claim(args: argparse.Namespace) -> int:
     backend = perform_click(*points["calendar_gift"], args.backend, bounds)
     print(f"calendar claim: clicked visible free gift via {backend}", flush=True)
     sleep_between(args.reward_wait)
-    backend = perform_click(*points["reward_dismiss"], args.backend, bounds)
+    backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"calendar claim: dismissed reward via {backend}", flush=True)
     backend = perform_click(*points["calendar_close"], args.backend, bounds)
     print(f"calendar claim complete: closed calendar via {backend}")
@@ -1146,11 +1175,38 @@ def command_welfare_claim(args: argparse.Namespace) -> int:
     set_phase_state(args, "welfare_opened")
     print(f"welfare claim: opened welfare cluster via {backend}", flush=True)
     sleep_between(args.open_wait)
-    backend = perform_click(*points["welfare_reward_popup_dismiss"], args.backend, bounds)
+    backend = perform_dismiss_click(*points["welfare_reward_popup_dismiss"], args.backend, bounds)
     print(f"welfare claim: dismissed automatic free reward via {backend}", flush=True)
     sleep_between(args.reward_wait)
     backend = perform_click(*points["back_bottom_left"], args.backend, bounds)
     print(f"welfare claim complete: returned without visiting recharge tabs via {backend}")
+    return 0
+
+
+def command_journey_resource_claim(args: argparse.Namespace) -> int:
+    """Open Journey and collect the verified gold and wood resource bubbles once each."""
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(
+        bounds,
+        "journey_tab",
+        "journey_gold_claim",
+        "journey_wood_claim",
+        "reward_dismiss",
+    )
+    if args.dry_run:
+        print(f"journey resource claim dry-run: points={points}")
+        return 0
+
+    backend = perform_click(*points["journey_tab"], args.backend, bounds)
+    print(f"journey resource claim: opened journey tab via {backend}", flush=True)
+    backend = perform_click(*points["journey_gold_claim"], args.backend, bounds)
+    print(f"journey resource claim: collected gold resource via {backend}", flush=True)
+    backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
+    print(f"journey resource claim: dismissed gold reward popup via {backend}", flush=True)
+    backend = perform_click(*points["journey_wood_claim"], args.backend, bounds)
+    print(f"journey resource claim: collected wood resource via {backend}", flush=True)
+    backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
+    print(f"journey resource claim: dismissed wood reward popup via {backend}")
     return 0
 
 
@@ -1256,10 +1312,15 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         ("welfare", command_welfare_claim),
         ("mail", command_mail_claim),
         ("legion", command_legion_daily_rewards),
+        ("journey", command_journey_resource_claim),
     )
-    results: list[PhaseResult] = []
-    for index, (name, handler) in enumerate(phases):
-        print(f"daily rewards: starting {name}", flush=True)
+    from_step = getattr(args, "from_step", 1)
+    start_index = from_step - 1
+    results: list[PhaseResult] = [
+        PhaseResult(name, "skipped") for name, _ in phases[:start_index]
+    ]
+    for index, (name, handler) in enumerate(phases[start_index:], start=start_index):
+        print(f"daily rewards: starting step {index + 1} {name}", flush=True)
         try:
             results.append(run_daily_phase(name, handler, phase_args))
         except ClickError as exc:
@@ -1315,7 +1376,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     print(f"legion daily rewards: opened daily cut via {backend}", flush=True)
     backend = perform_click(*points["legion_cut_once"], args.backend, bounds)
     print(f"legion daily rewards: clicked daily cut once via {backend}", flush=True)
-    backend = perform_click(*points["reward_dismiss"], args.backend, bounds)
+    backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"legion daily rewards: dismissed daily-cut reward info via {backend}", flush=True)
     backend = perform_click(*points["legion_modal_close"], args.backend, bounds)
     print(f"legion daily rewards: closed daily-cut modal via {backend}", flush=True)
@@ -1398,7 +1459,8 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         ("legion_reward_panel_close", "closed rewards panel", 0),
         ("legion_foreign_challenge_back", "returned to legion", 0),
     ):
-        backend = perform_click(*points[action], args.backend, bounds)
+        click = perform_dismiss_click if action == "reward_dismiss" else perform_click
+        backend = click(*points[action], args.backend, bounds)
         if action == "legion_reward_left":
             set_phase_state(args, "legion_rewards_opened")
         print(f"legion reward claims: {message} via {backend}", flush=True)
@@ -1581,13 +1643,29 @@ def build_parser() -> argparse.ArgumentParser:
     welfare_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     welfare_parser.set_defaults(func=command_welfare_claim)
 
+    journey_parser = sub.add_parser(
+        "journey-resource-claim",
+        help="open Journey and collect one visible gold and one visible wood resource bubble",
+    )
+    journey_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    journey_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    journey_parser.set_defaults(func=command_journey_resource_claim)
+
     daily_parser = sub.add_parser(
         "daily-rewards",
-        help="run patrol, calendar, welfare, mail, and legion daily rewards with one checked game window",
+        help="run patrol, calendar, welfare, mail, legion, and Journey daily rewards with one checked game window",
     )
     daily_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
+    daily_parser.add_argument(
+        "--from-step",
+        type=int,
+        choices=range(1, 7),
+        default=1,
+        metavar="N",
+        help="resume at phase 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, or 6=journey",
+    )
     daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
-    daily_parser.add_argument("--dry-run", action="store_true", help="print all three planned flows without clicking or sleeping")
+    daily_parser.add_argument("--dry-run", action="store_true", help="print all six planned flows without clicking or sleeping")
     daily_parser.set_defaults(func=command_daily_rewards)
 
     legion_daily_parser = sub.add_parser(
