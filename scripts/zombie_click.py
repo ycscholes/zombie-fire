@@ -166,7 +166,7 @@ ACTIONS: Dict[str, Action] = {
     "training_hall_scroll_area": Action(252, 500, "training hall scrollable list center"),
     "training_hall_drag_start": Action(252, 700, "training hall list lower drag point"),
     "training_hall_drag_end": Action(252, 220, "training hall list upper drag point"),
-    "training_hall_back": Action(84, 914, "return to training hall"),
+    "training_hall_back": Action(85, 908, "return from training hall to base"),
     "battle_challenge": Action(322, 505, "battlefield contest challenge"),
     "battle_modal_challenge": Action(355, 845, "battlefield contest lower challenge"),
     "battle_castle": Action(128, 805, "battlefield contest lower-left castle"),
@@ -181,8 +181,8 @@ ACTIONS: Dict[str, Action] = {
     "core_sweep": Action(254, 565, "core trial sweep"),
     "core_sweep_once": Action(337, 551, "core trial one-time sweep"),
     "core_sweep_close": Action(420, 270, "close core trial sweep dialog"),
-    "core_trial_back": Action(84, 914, "return from core trial"),
-    "element_back": Action(84, 914, "return from element trial"),
+    "core_trial_back": Action(85, 908, "return from core trial"),
+    "element_back": Action(85, 908, "return from element trial"),
     "journey_gold_claim": Action(368, 444, "visible journey gold resource bubble"),
     "journey_wood_claim": Action(229, 544, "visible journey wood resource bubble"),
     "legion_daily_cut": Action(282, 548, "legion daily-cut entry"),
@@ -652,7 +652,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         "battle_sweep_first", "reward_dismiss", "battle_modal_close",
         "training_hall_back", "element_challenge", "core_trial", "idle_button",
         "idle_claim", "idle_cancel", "core_sweep", "core_trial_back",
-        "element_back", "base_back",
+        "element_back",
     )
     points = scaled_points(bounds, *names)
     if args.dry_run:
@@ -683,7 +683,6 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     backend = perform_click(*points["core_trial_back"], args.backend, bounds)
     backend = perform_click(*points["element_back"], args.backend, bounds)
     backend = perform_click(*points["training_hall_back"], args.backend, bounds)
-    backend = perform_click(*points["base_back"], args.backend, bounds)
     print(f"base training hall complete: attempted battle={args.battle_times} and element trial via {backend}")
     return 0
 

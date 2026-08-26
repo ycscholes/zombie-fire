@@ -59,7 +59,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             point("battle_sweep_first"), point("reward_dismiss"), point("battle_sweep_first"), point("reward_dismiss"),
             point("battle_modal_close"), point("training_hall_back"),
             point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
-            point("idle_cancel"), point("core_sweep"), point("core_trial_back"), point("element_back"), point("training_hall_back"), point("base_back"),
+            point("idle_cancel"), point("core_sweep"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
         ])
 
 
