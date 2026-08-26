@@ -50,14 +50,63 @@ CGCLICK_SOURCE = r"""
 #include <ApplicationServices/ApplicationServices.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 int main(int argc, char **argv) {
-  if (argc != 3) { fprintf(stderr, "usage: zombie_cgclick x y\n"); return 2; }
+  if (argc == 6 && strcmp(argv[1], "drag") == 0) {
+    CGPoint start = CGPointMake(atof(argv[2]), atof(argv[3]));
+    CGPoint end = CGPointMake(atof(argv[4]), atof(argv[5]));
+    CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    if (!src) return 3;
+    CGEventRef move = CGEventCreateMouseEvent(src, kCGEventMouseMoved, start, kCGMouseButtonLeft);
+    CGEventRef down = CGEventCreateMouseEvent(src, kCGEventLeftMouseDown, start, kCGMouseButtonLeft);
+    CGEventRef up = CGEventCreateMouseEvent(src, kCGEventLeftMouseUp, end, kCGMouseButtonLeft);
+    if (!move || !down || !up) return 4;
+    CGEventPost(kCGHIDEventTap, move);
+    CGEventPost(kCGHIDEventTap, down);
+    usleep(80000);
+    for (int step = 1; step <= 12; step++) {
+      double fraction = (double)step / 12.0;
+      CGPoint point = CGPointMake(
+        start.x + (end.x - start.x) * fraction,
+        start.y + (end.y - start.y) * fraction
+      );
+      CGEventRef drag = CGEventCreateMouseEvent(src, kCGEventLeftMouseDragged, point, kCGMouseButtonLeft);
+      if (!drag) return 4;
+      CGEventPost(kCGHIDEventTap, drag);
+      CFRelease(drag);
+      usleep(16000);
+    }
+    CGEventPost(kCGHIDEventTap, up);
+    CFRelease(move);
+    CFRelease(down);
+    CFRelease(up);
+    CFRelease(src);
+    return 0;
+  }
+  if (argc == 5 && strcmp(argv[1], "scroll") == 0) {
+    double x = atof(argv[2]);
+    double y = atof(argv[3]);
+    int lines = atoi(argv[4]);
+    CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    if (!src) return 3;
+    CGEventRef move = CGEventCreateMouseEvent(src, kCGEventMouseMoved, CGPointMake(x, y), kCGMouseButtonLeft);
+    CGEventRef scroll = CGEventCreateScrollWheelEvent(src, kCGScrollEventUnitLine, 1, lines);
+    if (!move || !scroll) return 4;
+    CGEventPost(kCGHIDEventTap, move);
+    usleep(80000);
+    CGEventPost(kCGHIDEventTap, scroll);
+    CFRelease(move);
+    CFRelease(scroll);
+    CFRelease(src);
+    return 0;
+  }
+  if (argc != 3) { fprintf(stderr, "usage: zombie_cgclick x y | zombie_cgclick scroll x y lines | zombie_cgclick drag x1 y1 x2 y2\n"); return 2; }
+  CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+  if (!src) return 3;
   double x = atof(argv[1]);
   double y = atof(argv[2]);
   CGPoint p = CGPointMake(x, y);
-  CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-  if (!src) return 3;
   CGEventRef move = CGEventCreateMouseEvent(src, kCGEventMouseMoved, p, kCGMouseButtonLeft);
   CGEventRef down = CGEventCreateMouseEvent(src, kCGEventLeftMouseDown, p, kCGMouseButtonLeft);
   CGEventRef up = CGEventCreateMouseEvent(src, kCGEventLeftMouseUp, p, kCGMouseButtonLeft);
@@ -114,17 +163,24 @@ ACTIONS: Dict[str, Action] = {
     "base_tab": Action(312, 900, "bottom base tab"),
     "base_back": Action(38, 79, "return from base to home"),
     "training_hall": Action(164, 425, "base training hall entry"),
+    "training_hall_scroll_area": Action(252, 500, "training hall scrollable list center"),
+    "training_hall_drag_start": Action(252, 700, "training hall list lower drag point"),
+    "training_hall_drag_end": Action(252, 220, "training hall list upper drag point"),
     "training_hall_back": Action(84, 914, "return to training hall"),
-    "battle_challenge": Action(394, 700, "battlefield contest challenge"),
-    "battle_castle": Action(92, 760, "battlefield contest lower-left castle"),
-    "battle_sweep_first": Action(402, 270, "first battlefield contest sweep"),
+    "battle_challenge": Action(322, 505, "battlefield contest challenge"),
+    "battle_modal_challenge": Action(355, 845, "battlefield contest lower challenge"),
+    "battle_castle": Action(128, 805, "battlefield contest lower-left castle"),
+    "battle_sweep_first": Action(375, 355, "first battlefield contest sweep"),
     "battle_modal_close": Action(425, 228, "close battlefield contest modal"),
-    "element_challenge": Action(394, 700, "element trial challenge"),
-    "core_trial": Action(252, 500, "core trial entry"),
-    "idle_button": Action(394, 700, "core trial idle button"),
-    "idle_claim": Action(320, 580, "claim idle reward popup"),
-    "idle_cancel": Action(187, 579, "cancel idle reward popup"),
-    "core_sweep": Action(394, 780, "core trial sweep"),
+    "battle_page_back": Action(84, 875, "return from battlefield contest to training hall"),
+    "element_challenge": Action(322, 835, "element trial challenge"),
+    "core_trial": Action(255, 380, "core trial entry"),
+    "idle_button": Action(76, 225, "core trial idle button"),
+    "idle_claim": Action(254, 635, "claim idle reward popup"),
+    "idle_cancel": Action(420, 270, "close idle reward popup"),
+    "core_sweep": Action(254, 565, "core trial sweep"),
+    "core_sweep_once": Action(337, 551, "core trial one-time sweep"),
+    "core_sweep_close": Action(420, 270, "close core trial sweep dialog"),
     "core_trial_back": Action(84, 914, "return from core trial"),
     "element_back": Action(84, 914, "return from element trial"),
     "journey_gold_claim": Action(368, 444, "visible journey gold resource bubble"),
@@ -545,6 +601,22 @@ def click_cgclick_bin(x: int, y: int) -> bool:
     return True
 
 
+def scroll_cgclick_bin(x: int, y: int, lines: int) -> bool:
+    if not ensure_cgclick():
+        return False
+    assert CGCLICK_BIN is not None
+    subprocess.run([CGCLICK_BIN, "scroll", str(x), str(y), str(lines)], check=True)
+    return True
+
+
+def drag_cgclick_bin(x1: int, y1: int, x2: int, y2: int) -> bool:
+    if not ensure_cgclick():
+        return False
+    assert CGCLICK_BIN is not None
+    subprocess.run([CGCLICK_BIN, "drag", str(x1), str(y1), str(x2), str(y2)], check=True)
+    return True
+
+
 def click_system_events(x: int, y: int) -> bool:
     # System Events exposes only an atomic `click at` action. Route its legacy
     # selector to cgclick so every real delivery has move/down/hold/up semantics.
@@ -556,19 +628,17 @@ def wait_after_click() -> None:
 
 
 def scroll_to_bottom(args: argparse.Namespace) -> None:
-    """Scroll the training-hall surface down using the verified macOS key path."""
+    """Scroll the focused training-hall canvas down with CoreGraphics."""
     if getattr(args, "skip_scroll", False):
         return
-    for _ in range(4):
-        proc = subprocess.run(
-            ["osascript", "-e", 'tell application "System Events" to key code 121'],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if proc.returncode != 0:
-            raise ClickError(f"training hall scroll failed: {proc.stderr.strip()}")
+    bounds = args.active_bounds
+    focus_game_window(bounds)
+    ensure_unchanged_game_window(bounds)
+    x1, y1 = scale_point(ACTIONS["training_hall_drag_start"], bounds)
+    x2, y2 = scale_point(ACTIONS["training_hall_drag_end"], bounds)
+    if not drag_cgclick_bin(x1, y1, x2, y2):
+        raise ClickDeliveryError("CoreGraphics drag backend unavailable")
+    time.sleep(1.0)
 
 
 def command_base_training_hall(args: argparse.Namespace) -> int:
@@ -576,8 +646,9 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     if args.battle_times < 1:
         raise ClickError("--battle-times must be >= 1")
     bounds = prepare_command_bounds(args)
+    args.active_bounds = bounds
     names = (
-        "base_tab", "training_hall", "battle_challenge", "battle_castle",
+        "base_tab", "training_hall", "battle_challenge", "battle_castle", "battle_modal_challenge",
         "battle_sweep_first", "reward_dismiss", "battle_modal_close",
         "training_hall_back", "element_challenge", "core_trial", "idle_button",
         "idle_claim", "idle_cancel", "core_sweep", "core_trial_back",
@@ -595,7 +666,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     scroll_to_bottom(args)
     backend = perform_click(*points["battle_challenge"], args.backend, bounds)
     backend = perform_click(*points["battle_castle"], args.backend, bounds)
-    backend = perform_click(*points["battle_challenge"], args.backend, bounds)
+    backend = perform_click(*points["battle_modal_challenge"], args.backend, bounds)
     for index in range(args.battle_times):
         backend = perform_click(*points["battle_sweep_first"], args.backend, bounds)
         backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)

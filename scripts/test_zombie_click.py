@@ -17,6 +17,16 @@ SPEC.loader.exec_module(zombie_click)
 
 
 class BaseTrainingHallTests(unittest.TestCase):
+    def test_scroll_helper_emits_a_coregraphics_scroll_event(self) -> None:
+        self.assertIn("CGEventCreateScrollWheelEvent", zombie_click.CGCLICK_SOURCE)
+        self.assertIn('strcmp(argv[1], "scroll")', zombie_click.CGCLICK_SOURCE)
+        self.assertIn("zombie_cgclick scroll x y lines", zombie_click.CGCLICK_SOURCE)
+
+    def test_scroll_helper_emits_a_drag_gesture_for_canvas_lists(self) -> None:
+        self.assertIn("kCGEventLeftMouseDragged", zombie_click.CGCLICK_SOURCE)
+        self.assertIn('strcmp(argv[1], "drag")', zombie_click.CGCLICK_SOURCE)
+        self.assertIn("step <= 12", zombie_click.CGCLICK_SOURCE)
+
     def test_base_training_hall_parser_defaults_to_five_battle_sweeps(self) -> None:
         args = zombie_click.build_parser().parse_args(["base-training-hall"])
         self.assertEqual(args.battle_times, 5)
@@ -45,7 +55,7 @@ class BaseTrainingHallTests(unittest.TestCase):
         point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
         self.assertEqual(events, [
             point("base_tab"), point("training_hall"), "scroll",
-            point("battle_challenge"), point("battle_castle"), point("battle_challenge"),
+            point("battle_challenge"), point("battle_castle"), point("battle_modal_challenge"),
             point("battle_sweep_first"), point("reward_dismiss"), point("battle_sweep_first"), point("reward_dismiss"),
             point("battle_modal_close"), point("training_hall_back"),
             point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
