@@ -179,7 +179,7 @@ ACTIONS: Dict[str, Action] = {
     "idle_claim": Action(254, 635, "claim idle reward popup"),
     "idle_cancel": Action(420, 270, "close idle reward popup"),
     "core_sweep": Action(254, 565, "core trial sweep"),
-    "core_sweep_once": Action(337, 551, "core trial one-time sweep"),
+    "core_sweep_ten": Action(184, 551, "core trial ten-time sweep"),
     "core_sweep_close": Action(420, 270, "close core trial sweep dialog"),
     "core_trial_back": Action(85, 908, "return from core trial"),
     "element_back": Action(85, 908, "return from element trial"),
@@ -651,7 +651,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         "base_tab", "training_hall", "battle_challenge", "battle_castle", "battle_modal_challenge",
         "battle_sweep_first", "reward_dismiss", "battle_modal_close",
         "training_hall_back", "element_challenge", "core_trial", "idle_button",
-        "idle_claim", "idle_cancel", "core_sweep", "core_trial_back",
+        "idle_claim", "idle_cancel", "core_sweep", "core_sweep_ten", "core_trial_back",
         "element_back",
     )
     points = scaled_points(bounds, *names)
@@ -680,6 +680,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     backend = perform_click(*points["idle_cancel"], args.backend, bounds)
     backend = perform_click(*points["core_sweep"], args.backend, bounds)
+    backend = perform_click(*points["core_sweep_ten"], args.backend, bounds)
     backend = perform_click(*points["core_trial_back"], args.backend, bounds)
     backend = perform_click(*points["element_back"], args.backend, bounds)
     backend = perform_click(*points["training_hall_back"], args.backend, bounds)
