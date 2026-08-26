@@ -111,6 +111,22 @@ ACTIONS: Dict[str, Action] = {
     "battle_tab": Action(250, 900, "bottom battle tab"),
     "legion_tab": Action(367, 900, "bottom legion tab"),
     "journey_tab": Action(404, 900, "bottom journey tab"),
+    "base_tab": Action(312, 900, "bottom base tab"),
+    "base_back": Action(38, 79, "return from base to home"),
+    "training_hall": Action(164, 425, "base training hall entry"),
+    "training_hall_back": Action(84, 914, "return to training hall"),
+    "battle_challenge": Action(394, 700, "battlefield contest challenge"),
+    "battle_castle": Action(92, 760, "battlefield contest lower-left castle"),
+    "battle_sweep_first": Action(402, 270, "first battlefield contest sweep"),
+    "battle_modal_close": Action(425, 228, "close battlefield contest modal"),
+    "element_challenge": Action(394, 700, "element trial challenge"),
+    "core_trial": Action(252, 500, "core trial entry"),
+    "idle_button": Action(394, 700, "core trial idle button"),
+    "idle_claim": Action(320, 580, "claim idle reward popup"),
+    "idle_cancel": Action(187, 579, "cancel idle reward popup"),
+    "core_sweep": Action(394, 780, "core trial sweep"),
+    "core_trial_back": Action(84, 914, "return from core trial"),
+    "element_back": Action(84, 914, "return from element trial"),
     "journey_gold_claim": Action(368, 444, "visible journey gold resource bubble"),
     "journey_wood_claim": Action(229, 544, "visible journey wood resource bubble"),
     "legion_daily_cut": Action(282, 548, "legion daily-cut entry"),
@@ -537,6 +553,68 @@ def click_system_events(x: int, y: int) -> bool:
 
 def wait_after_click() -> None:
     time.sleep(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX))
+
+
+def scroll_to_bottom(args: argparse.Namespace) -> None:
+    """Scroll the training-hall surface down using the verified macOS key path."""
+    if getattr(args, "skip_scroll", False):
+        return
+    for _ in range(4):
+        proc = subprocess.run(
+            ["osascript", "-e", 'tell application "System Events" to key code 121'],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise ClickError(f"training hall scroll failed: {proc.stderr.strip()}")
+
+
+def command_base_training_hall(args: argparse.Namespace) -> int:
+    """Run the verified free Battlefield Contest and Element Trial route."""
+    if args.battle_times < 1:
+        raise ClickError("--battle-times must be >= 1")
+    bounds = prepare_command_bounds(args)
+    names = (
+        "base_tab", "training_hall", "battle_challenge", "battle_castle",
+        "battle_sweep_first", "reward_dismiss", "battle_modal_close",
+        "training_hall_back", "element_challenge", "core_trial", "idle_button",
+        "idle_claim", "idle_cancel", "core_sweep", "core_trial_back",
+        "element_back", "base_back",
+    )
+    points = scaled_points(bounds, *names)
+    if args.dry_run:
+        print(f"base training hall dry-run: battle_times={args.battle_times}, skip_scroll={args.skip_scroll}, points={points}")
+        return 0
+
+    backend = perform_click(*points["base_tab"], args.backend, bounds)
+    print(f"base training hall: opened base tab via {backend}", flush=True)
+    backend = perform_click(*points["training_hall"], args.backend, bounds)
+    print(f"base training hall: opened training hall via {backend}", flush=True)
+    scroll_to_bottom(args)
+    backend = perform_click(*points["battle_challenge"], args.backend, bounds)
+    backend = perform_click(*points["battle_castle"], args.backend, bounds)
+    backend = perform_click(*points["battle_challenge"], args.backend, bounds)
+    for index in range(args.battle_times):
+        backend = perform_click(*points["battle_sweep_first"], args.backend, bounds)
+        backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
+        print(f"battlefield contest sweep {index + 1}/{args.battle_times} via {backend}", flush=True)
+    backend = perform_click(*points["battle_modal_close"], args.backend, bounds)
+    backend = perform_click(*points["training_hall_back"], args.backend, bounds)
+    backend = perform_click(*points["element_challenge"], args.backend, bounds)
+    backend = perform_click(*points["core_trial"], args.backend, bounds)
+    backend = perform_click(*points["idle_button"], args.backend, bounds)
+    backend = perform_click(*points["idle_claim"], args.backend, bounds)
+    backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
+    backend = perform_click(*points["idle_cancel"], args.backend, bounds)
+    backend = perform_click(*points["core_sweep"], args.backend, bounds)
+    backend = perform_click(*points["core_trial_back"], args.backend, bounds)
+    backend = perform_click(*points["element_back"], args.backend, bounds)
+    backend = perform_click(*points["training_hall_back"], args.backend, bounds)
+    backend = perform_click(*points["base_back"], args.backend, bounds)
+    print(f"base training hall complete: attempted battle={args.battle_times} and element trial via {backend}")
+    return 0
 
 
 def try_click_backend(name: str, x: int, y: int) -> tuple[bool, str]:
@@ -1650,6 +1728,16 @@ def build_parser() -> argparse.ArgumentParser:
     journey_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     journey_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     journey_parser.set_defaults(func=command_journey_resource_claim)
+
+    base_parser = sub.add_parser(
+        "base-training-hall",
+        help="run the free Battlefield Contest and Element Trial route from the base tab",
+    )
+    base_parser.add_argument("--battle-times", type=int, default=5)
+    base_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    base_parser.add_argument("--skip-scroll", action="store_true", help="use after Computer Use has scrolled to the training hall bottom")
+    base_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    base_parser.set_defaults(func=command_base_training_hall)
 
     daily_parser = sub.add_parser(
         "daily-rewards",

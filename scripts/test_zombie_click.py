@@ -16,6 +16,43 @@ sys.modules[SPEC.name] = zombie_click
 SPEC.loader.exec_module(zombie_click)
 
 
+class BaseTrainingHallTests(unittest.TestCase):
+    def test_base_training_hall_parser_defaults_to_five_battle_sweeps(self) -> None:
+        args = zombie_click.build_parser().parse_args(["base-training-hall"])
+        self.assertEqual(args.battle_times, 5)
+
+    def test_base_training_hall_dry_run_is_registered(self) -> None:
+        with patch.object(zombie_click, "focus_game_window_at_start") as focus:
+            self.assertEqual(
+                zombie_click.main(["--mock-bounds", "2,33,508,949", "base-training-hall", "--dry-run"]),
+                0,
+            )
+        focus.assert_not_called()
+
+    def test_base_training_hall_route_uses_battle_then_element_trial(self) -> None:
+        args = zombie_click.build_parser().parse_args(["base-training-hall", "--battle-times", "2"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[str] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "sleep_between"),
+            patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
+        ):
+            self.assertEqual(zombie_click.command_base_training_hall(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(events, [
+            point("base_tab"), point("training_hall"), "scroll",
+            point("battle_challenge"), point("battle_castle"), point("battle_challenge"),
+            point("battle_sweep_first"), point("reward_dismiss"), point("battle_sweep_first"), point("reward_dismiss"),
+            point("battle_modal_close"), point("training_hall_back"),
+            point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
+            point("idle_cancel"), point("core_sweep"), point("core_trial_back"), point("element_back"), point("training_hall_back"), point("base_back"),
+        ])
+
+
 class FocusEligibilityTests(unittest.TestCase):
     @staticmethod
     def game_snapshot(
