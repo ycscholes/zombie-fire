@@ -736,7 +736,7 @@ class FocusEligibilityTests(unittest.TestCase):
             [point("welfare_cluster"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
         )
 
-    def test_daily_rewards_runs_all_six_phases_in_order_with_shared_bounds(self) -> None:
+    def test_daily_rewards_runs_all_seven_phases_in_order_with_shared_bounds(self) -> None:
         args = argparse.Namespace(
             mock_bounds=None,
             fit=True,
@@ -778,12 +778,17 @@ class FocusEligibilityTests(unittest.TestCase):
                 "command_journey_resource_claim",
                 side_effect=lambda phase_args: phases.append(("journey", phase_args.mock_bounds)),
             ),
+            patch.object(
+                zombie_click,
+                "command_base_training_hall",
+                side_effect=lambda phase_args: phases.append(("base", phase_args.mock_bounds)),
+            ),
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
         self.assertEqual(
             phases,
-            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds)],
+            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds), ("base", bounds)],
         )
 
     def test_daily_rewards_from_step_three_skips_patrol_and_calendar(self) -> None:
@@ -814,13 +819,18 @@ class FocusEligibilityTests(unittest.TestCase):
                 "command_journey_resource_claim",
                 side_effect=lambda _: phases.append("journey"),
             ),
+            patch.object(
+                zombie_click,
+                "command_base_training_hall",
+                side_effect=lambda _: phases.append("base"),
+            ),
             patch("builtins.print") as print_mock,
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
         patrol.assert_not_called()
         calendar.assert_not_called()
-        self.assertEqual(phases, ["welfare", "mail", "legion", "journey"])
+        self.assertEqual(phases, ["welfare", "mail", "legion", "journey", "base"])
         summary = "\n".join(str(call.args[0]) for call in print_mock.call_args_list)
         self.assertIn("patrol=skipped", summary)
         self.assertIn("calendar=skipped", summary)
@@ -830,7 +840,7 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(args.from_step, 1)
 
     def test_daily_rewards_from_step_rejects_out_of_range_values(self) -> None:
-        for value in ("0", "7"):
+        for value in ("0", "8"):
             with self.subTest(value=value), self.assertRaises(SystemExit):
                 zombie_click.build_parser().parse_args(["daily-rewards", "--from-step", value])
 

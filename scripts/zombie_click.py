@@ -1412,7 +1412,7 @@ def print_daily_summary(results: list[PhaseResult]) -> None:
 
 
 def command_daily_rewards(args: argparse.Namespace) -> int:
-    """Run patrol, calendar, welfare, mail, and legion rewards against one checked window."""
+    """Run all seven configured daily-reward phases against one checked window."""
     if args.mock_bounds:
         bounds = get_bounds(args)
         validate_bounds(bounds, allow_mock=True)
@@ -1452,6 +1452,8 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         "sweep_reward_wait": 1.2,
         "sweep_between": 0.6,
         "reward_page_wait": 4.0,
+        "battle_times": 5,
+        "skip_scroll": False,
     }
     phase_args = argparse.Namespace(**phase_values)
 
@@ -1462,6 +1464,7 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         ("mail", command_mail_claim),
         ("legion", command_legion_daily_rewards),
         ("journey", command_journey_resource_claim),
+        ("base", command_base_training_hall),
     )
     from_step = getattr(args, "from_step", 1)
     start_index = from_step - 1
@@ -1818,10 +1821,10 @@ def build_parser() -> argparse.ArgumentParser:
     daily_parser.add_argument(
         "--from-step",
         type=int,
-        choices=range(1, 7),
+        choices=range(1, 8),
         default=1,
         metavar="N",
-        help="resume at phase 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, or 6=journey",
+        help="resume at phase 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, 6=journey, or 7=base training hall",
     )
     daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     daily_parser.add_argument("--dry-run", action="store_true", help="print all six planned flows without clicking or sleeping")
