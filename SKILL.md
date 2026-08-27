@@ -26,17 +26,19 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patr
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mail-claim
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py calendar-claim
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py welfare-claim
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-sweep-batch --times 2
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 0,33,508,949 legion-sweep-batch --times 2 --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py shop-training-hall
 ```
 
 The helper maps the normal `508x949` Computer Use coordinate space to the
 current front WeChat window. It aborts when the front app, window size, or
 aspect ratio does not look like the game window.
 
-Every helper click waits a random `0.5` to `1.0` seconds before the next helper
+Every helper click waits a random `0.4` to `0.6` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
 Reward-popup dismiss clicks use a fixed 1-second wait after dismissal before
 the next operation.
@@ -197,11 +199,11 @@ It performs the complete patrol route, calendar free-gift claim, welfare free
 reward dismissal, mail claim, legion daily-rewards route, then the Journey
 gold/wood resource claim. The command
 validates and calibrates the game window once before the first action, then
-preserves those bounds for all six phases.
+preserves those bounds for all eight phases.
 
 To resume a new run after a prior phase was recovered or stopped, pass
 `--from-step N`: `1=patrol`, `2=calendar`, `3=welfare`, `4=mail`, `5=legion`,
-and `6=journey`. It marks earlier phases as `skipped`, then performs the usual
+`6=journey`, `7=base training hall`, and `8=shop training hall`. It marks earlier phases as `skipped`, then performs the usual
 focus and calibration before the selected phase. It never infers prior progress
 or resumes a phase-internal click; choose a phase only after returning to its
 known safe boundary.
@@ -215,7 +217,7 @@ visual proof of every reward claim. Game-window, login, geometry, failed
 cleanup, and an ad that does not return to the calibrated game remain fatal and
 stop the command without speculative clicks.
 
-Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all six flows
+Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all eight flows
 without focusing a game window, clicking, or sleeping. It retains the existing
 defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
 
@@ -309,6 +311,11 @@ unexpected state.
 
 ## Shop
 
+- `shop-training-hall` enters the shop, explicitly opens `资源`, then performs
+  two long upward drags to reach the resource page bottom,
+  claims only the direct-free `金币 x600`, dismisses its reward popup, then
+  opens `特惠礼包` and claims/dismisses the direct-free gold card. It never
+  clicks video, diamond, RMB, discount, or unclear offers.
 - Enter `商城` -> `资源`; inspect visible direct-free items only.
 - Click `资源` `免费` only if it is direct free. Skip video/ad icons. If an ad
   opens accidentally, close it immediately and do not wait.

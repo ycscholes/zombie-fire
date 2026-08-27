@@ -1,9 +1,11 @@
+import io
 import argparse
 import importlib.util
 import pathlib
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 
@@ -17,6 +19,11 @@ SPEC.loader.exec_module(zombie_click)
 
 
 class BaseTrainingHallTests(unittest.TestCase):
+    def test_task_compat_does_not_replace_base_scroll_with_entry_wrapper(self) -> None:
+        original = zombie_click._base.scroll_to_bottom
+        zombie_click._sync_task_compat(zombie_click._base)
+        self.assertIs(zombie_click._base.scroll_to_bottom, original)
+
     def test_scroll_helper_emits_a_coregraphics_scroll_event(self) -> None:
         self.assertIn("CGEventCreateScrollWheelEvent", zombie_click.CGCLICK_SOURCE)
         self.assertIn('strcmp(argv[1], "scroll")', zombie_click.CGCLICK_SOURCE)
@@ -31,6 +38,11 @@ class BaseTrainingHallTests(unittest.TestCase):
         args = zombie_click.build_parser().parse_args(["base-training-hall"])
         self.assertEqual(args.battle_times, 5)
 
+    def test_battlefield_contest_targets_bottom_list_row(self) -> None:
+        self.assertEqual((zombie_click.ACTIONS["battle_modal_drag_start"].x, zombie_click.ACTIONS["battle_modal_drag_start"].y), (250, 580))
+        self.assertEqual((zombie_click.ACTIONS["battle_modal_drag_end"].x, zombie_click.ACTIONS["battle_modal_drag_end"].y), (250, 330))
+        self.assertEqual((zombie_click.ACTIONS["battle_sweep_last"].x, zombie_click.ACTIONS["battle_sweep_last"].y), (375, 578))
+
     def test_base_training_hall_dry_run_is_registered(self) -> None:
         with patch.object(zombie_click, "focus_game_window_at_start") as focus:
             self.assertEqual(
@@ -39,7 +51,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             )
         focus.assert_not_called()
 
-    def test_base_training_hall_route_uses_battle_then_element_trial(self) -> None:
+    def test_base_training_hall_route_uses_new_base_tasks_then_battle_and_element_trial(self) -> None:
         args = zombie_click.build_parser().parse_args(["base-training-hall", "--battle-times", "2"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         events: list[str] = []
@@ -50,17 +62,115 @@ class BaseTrainingHallTests(unittest.TestCase):
             patch.object(zombie_click, "sleep_between"),
             patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
         ):
-            self.assertEqual(zombie_click.command_base_training_hall(args), 0)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(zombie_click.command_base_training_hall(args), 0)
 
         point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
         self.assertEqual(events, [
-            point("base_tab"), point("training_hall"), "scroll",
-            point("battle_challenge"), point("battle_castle"), point("battle_modal_challenge"),
-            point("battle_sweep_first"), point("reward_dismiss"), point("battle_sweep_first"), point("reward_dismiss"),
+            point("base_tab"), point("cafeteria"), point("cafeteria_claim"),
+            point("training_reward_dismiss"), point("cafeteria_back"), point("training_hall"),
+            point("global_rescue_challenge"), point("global_rescue_free"), point("training_reward_dismiss"), point("training_hall_back"),
+            "scroll", point("terminal_crisis_challenge"), point("terminal_crisis_sweep"), point("terminal_crisis_confirm"),
+            point("training_reward_dismiss"), point("training_hall_back"),
+            point("battle_challenge"), point("battle_castle"), point("reward_dismiss"), point("battle_modal_challenge"), "scroll",
+            point("battle_sweep_last"), point("reward_dismiss"), point("battle_sweep_last"), point("reward_dismiss"),
             point("battle_modal_close"), point("training_hall_back"),
             point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
-            point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
+            point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("reward_dismiss"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
         ])
+        log = output.getvalue()
+        for action in (
+            "base_tab", "cafeteria", "cafeteria_claim", "training_reward_dismiss", "cafeteria_back", "training_hall",
+            "global_rescue_challenge", "global_rescue_free", "training_hall_back", "scroll_to_bottom",
+            "terminal_crisis_challenge", "terminal_crisis_sweep", "terminal_crisis_confirm",
+            "battle_challenge", "battle_castle",
+            "battle_modal_challenge", "battle_modal_scroll_to_bottom", "battle_sweep_last", "reward_dismiss", "battle_modal_close",
+            "training_hall_back", "element_challenge", "core_trial", "idle_button", "idle_claim",
+            "idle_cancel", "core_sweep", "core_sweep_ten", "core_trial_back", "element_back",
+        ):
+            self.assertIn(f"base training hall: {action}", log)
+
+    def test_base_training_hall_route_includes_cafeteria_and_training_hall_tasks(self) -> None:
+        args = zombie_click.build_parser().parse_args(["base-training-hall", "--battle-times", "1"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[object] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1]),
+            patch.object(zombie_click, "sleep_between"),
+            patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
+        ):
+            self.assertEqual(zombie_click.command_base_training_hall(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(events[:10], [
+            point("base_tab"), point("cafeteria"), point("cafeteria_claim"),
+            (point("training_reward_dismiss")[0], point("training_reward_dismiss")[1], "dismiss"),
+            point("cafeteria_back"), point("training_hall"),
+            point("global_rescue_challenge"), point("global_rescue_free"),
+            (point("training_reward_dismiss")[0], point("training_reward_dismiss")[1], "dismiss"),
+            point("training_hall_back"),
+        ])
+        self.assertEqual(events[10:16], [
+            "scroll", point("terminal_crisis_challenge"), point("terminal_crisis_sweep"),
+            point("terminal_crisis_confirm"),
+            (point("training_reward_dismiss")[0], point("training_reward_dismiss")[1], "dismiss"),
+            point("training_hall_back"),
+        ])
+
+
+class ShopTrainingHallTests(unittest.TestCase):
+    def test_shop_training_hall_parser_is_registered(self) -> None:
+        args = zombie_click.build_parser().parse_args(["shop-training-hall"])
+        self.assertEqual(args.command, "shop-training-hall")
+
+    def test_shop_training_hall_route_claims_resource_and_special_pack_gold(self) -> None:
+        args = zombie_click.build_parser().parse_args(["shop-training-hall"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[object] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(
+                zombie_click,
+                "perform_click",
+                side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1],
+            ),
+            patch.object(
+                zombie_click,
+                "perform_dismiss_click",
+                side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1],
+            ),
+            patch.object(zombie_click._shop, "_base_scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_shop_training_hall(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            events,
+            [
+                point("shop_tab"), point("shop_resource_tab"), "scroll", "scroll", point("shop_resource_gold600_free"),
+                (point("reward_dismiss")[0], point("reward_dismiss")[1], "dismiss"),
+                point("shop_special_pack_tab"), point("shop_gold_free"),
+                (point("reward_dismiss")[0], point("reward_dismiss")[1], "dismiss"),
+            ],
+        )
+
+    def test_shop_resource_scroll_and_gold600_coordinates_are_calibrated(self) -> None:
+        self.assertEqual(
+            (zombie_click.ACTIONS["shop_resource_drag_start"].x, zombie_click.ACTIONS["shop_resource_drag_start"].y),
+            (252, 760),
+        )
+        self.assertEqual(
+            (zombie_click.ACTIONS["shop_resource_drag_end"].x, zombie_click.ACTIONS["shop_resource_drag_end"].y),
+            (252, 120),
+        )
+        self.assertEqual(
+            (zombie_click.ACTIONS["shop_resource_gold600_free"].x, zombie_click.ACTIONS["shop_resource_gold600_free"].y),
+            (255, 605),
+        )
 
 
 class FocusEligibilityTests(unittest.TestCase):
@@ -342,8 +452,14 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(sleep.call_args_list[0].args, (2.0,))
         self.assertEqual(sleep.call_args_list[1].args, (0.5,))
         post_click_wait = sleep.call_args_list[2].args[0]
-        self.assertGreaterEqual(post_click_wait, 0.5)
-        self.assertLessEqual(post_click_wait, 1.0)
+        self.assertGreaterEqual(post_click_wait, 0.4)
+        self.assertLessEqual(post_click_wait, 0.6)
+
+    def test_default_patrol_ad_wait_is_33_seconds(self) -> None:
+        parser = zombie_click.build_parser()
+        for command in ("patrol-ads-batch", "patrol-full-from-home", "patrol-ads-from-home"):
+            args = parser.parse_args([command])
+            self.assertEqual(args.ad_wait, 33.0)
 
     def test_reward_dismiss_clicks_once_and_waits_one_second(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -736,7 +852,7 @@ class FocusEligibilityTests(unittest.TestCase):
             [point("welfare_cluster"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
         )
 
-    def test_daily_rewards_runs_all_seven_phases_in_order_with_shared_bounds(self) -> None:
+    def test_daily_rewards_runs_all_eight_phases_in_order_with_shared_bounds(self) -> None:
         args = argparse.Namespace(
             mock_bounds=None,
             fit=True,
@@ -783,12 +899,17 @@ class FocusEligibilityTests(unittest.TestCase):
                 "command_base_training_hall",
                 side_effect=lambda phase_args: phases.append(("base", phase_args.mock_bounds)),
             ),
+            patch.object(
+                zombie_click,
+                "command_shop_training_hall",
+                side_effect=lambda phase_args: phases.append(("shop", phase_args.mock_bounds)),
+            ),
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
         self.assertEqual(
             phases,
-            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds), ("base", bounds)],
+            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds), ("base", bounds), ("shop", bounds)],
         )
 
     def test_daily_rewards_from_step_three_skips_patrol_and_calendar(self) -> None:
@@ -824,13 +945,18 @@ class FocusEligibilityTests(unittest.TestCase):
                 "command_base_training_hall",
                 side_effect=lambda _: phases.append("base"),
             ),
+            patch.object(
+                zombie_click,
+                "command_shop_training_hall",
+                side_effect=lambda _: phases.append("shop"),
+            ),
             patch("builtins.print") as print_mock,
         ):
             self.assertEqual(zombie_click.command_daily_rewards(args), 0)
 
         patrol.assert_not_called()
         calendar.assert_not_called()
-        self.assertEqual(phases, ["welfare", "mail", "legion", "journey", "base"])
+        self.assertEqual(phases, ["welfare", "mail", "legion", "journey", "base", "shop"])
         summary = "\n".join(str(call.args[0]) for call in print_mock.call_args_list)
         self.assertIn("patrol=skipped", summary)
         self.assertIn("calendar=skipped", summary)
@@ -840,7 +966,7 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(args.from_step, 1)
 
     def test_daily_rewards_from_step_rejects_out_of_range_values(self) -> None:
-        for value in ("0", "8"):
+        for value in ("0", "9"):
             with self.subTest(value=value), self.assertRaises(SystemExit):
                 zombie_click.build_parser().parse_args(["daily-rewards", "--from-step", value])
 
