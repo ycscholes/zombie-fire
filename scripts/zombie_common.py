@@ -605,7 +605,7 @@ def perform_dismiss_click(
 
 
 def sleep_between(seconds: float) -> None:
-    time.sleep(max(MIN_WAIT_SECONDS, seconds - 1.0))
+    time.sleep(max(MIN_WAIT_SECONDS, seconds - 0.5))
 
 
 def run_repeated_click_flow(

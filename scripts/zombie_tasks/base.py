@@ -39,6 +39,53 @@ def scroll_to_bottom(
     time.sleep(1.0)
 
 
+def _purchase_play_shop_item(
+    args: argparse.Namespace,
+    points: dict[str, tuple[int, int]],
+    item_action: str,
+    bounds: Bounds,
+) -> None:
+    backend = perform_click(*points[item_action], args.backend, bounds)
+    print(f"base training hall shop: opened {item_action} via {backend}", flush=True)
+    perform_click(*points["play_shop_max"], args.backend, bounds)
+    perform_click(*points["play_shop_buy"], args.backend, bounds)
+    perform_dismiss_click(*points["play_shop_reward_dismiss"], args.backend, bounds)
+    perform_click(*points["play_shop_modal_close"], args.backend, bounds)
+    print(f"base training hall shop: completed {item_action}", flush=True)
+
+
+def command_base_training_hall_shop(args: argparse.Namespace) -> int:
+    """Run the play-shop purchase route from the already-open training hall."""
+    bounds = prepare_command_bounds(args)
+    args.active_bounds = bounds
+    names = (
+        "play_shop", "play_shop_enhancer", "play_shop_battle_tab",
+        "play_shop_battle_drag_start", "play_shop_battle_drag_end", "play_shop_gun_blueprint",
+        "play_shop_tabs_drag_start", "play_shop_tabs_drag_end", "play_shop_element_tab",
+        "play_shop_base_material", "play_shop_legion_tab", "play_shop_skill_manual",
+        "play_shop_max", "play_shop_buy", "play_shop_reward_dismiss", "play_shop_modal_close",
+        "play_shop_close",
+    )
+    points = scaled_points(bounds, *names)
+    if args.dry_run:
+        print(f"base training hall shop dry-run: points={points}")
+        return 0
+
+    perform_click(*points["play_shop"], args.backend, bounds)
+    _purchase_play_shop_item(args, points, "play_shop_enhancer", bounds)
+    perform_click(*points["play_shop_battle_tab"], args.backend, bounds)
+    scroll_to_bottom(args, "play_shop_battle_drag_start", "play_shop_battle_drag_end")
+    _purchase_play_shop_item(args, points, "play_shop_gun_blueprint", bounds)
+    scroll_to_bottom(args, "play_shop_tabs_drag_start", "play_shop_tabs_drag_end")
+    perform_click(*points["play_shop_element_tab"], args.backend, bounds)
+    _purchase_play_shop_item(args, points, "play_shop_base_material", bounds)
+    perform_click(*points["play_shop_legion_tab"], args.backend, bounds)
+    _purchase_play_shop_item(args, points, "play_shop_skill_manual", bounds)
+    perform_click(*points["play_shop_close"], args.backend, bounds)
+    print("base training hall shop complete: purchased four items and closed shop", flush=True)
+    return 0
+
+
 def command_base_training_hall(args: argparse.Namespace) -> int:
     """Run the verified free base, training-hall, battlefield, and element routes."""
     if args.battle_times < 1:
@@ -101,6 +148,9 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "core_trial_back", bounds)
     _click_action(args, points, "element_back", bounds)
+    command_base_training_hall_shop(
+        argparse.Namespace(mock_bounds=bounds, backend=args.backend, dry_run=False)
+    )
     backend = _click_action(args, points, "training_hall_back", bounds)
     print(
         "base training hall complete: claimed cafeteria, Global Rescue, Terminal Crisis, "

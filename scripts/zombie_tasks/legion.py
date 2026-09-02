@@ -5,6 +5,49 @@ from __future__ import annotations
 from ..zombie_common import *
 from ..zombie_actions import *
 
+from .base import scroll_to_bottom as _base_scroll_to_bottom
+
+
+def scroll_legion_shop_to_bottom(args: argparse.Namespace) -> None:
+    """Scroll the legion shop list to its bottom using the proven canvas drag."""
+    _base_scroll_to_bottom(args, "legion_shop_drag_start", "legion_shop_drag_end")
+
+
+def _purchase_legion_shop_item(args: argparse.Namespace, points: dict[str, tuple[int, int]], item_action: str, bounds: Bounds) -> None:
+    backend = perform_click(*points[item_action], args.backend, bounds)
+    print(f"legion shop purchases: opened {item_action} via {backend}", flush=True)
+    perform_click(*points["legion_shop_max"], args.backend, bounds)
+    perform_click(*points["legion_shop_buy"], args.backend, bounds)
+    perform_dismiss_click(*points["legion_shop_reward_dismiss"], args.backend, bounds)
+    perform_click(*points["legion_shop_modal_close"], args.backend, bounds)
+    print(f"legion shop purchases: completed {item_action}", flush=True)
+
+
+def command_legion_shop_purchases(args: argparse.Namespace) -> int:
+    """Open the legion shop and position its list at the bottom for purchases."""
+    bounds = prepare_command_bounds(args)
+    args.active_bounds = bounds
+    points = scaled_points(
+        bounds,
+        "legion_shop", "legion_shop_drag_start", "legion_shop_drag_end",
+        "legion_shop_gun_blueprint", "legion_shop_base_powder", "legion_shop_enhancer",
+        "legion_shop_max", "legion_shop_buy", "legion_shop_reward_dismiss",
+        "legion_shop_modal_close", "legion_shop_close",
+    )
+    if args.dry_run:
+        print(f"legion shop purchases dry-run: points={points}")
+        return 0
+
+    backend = perform_click(*points["legion_shop"], args.backend, bounds)
+    print(f"legion shop purchases: opened shop via {backend}", flush=True)
+    scroll_legion_shop_to_bottom(args)
+    print("legion shop purchases: scrolled to bottom via cgclick", flush=True)
+    for item_action in ("legion_shop_gun_blueprint", "legion_shop_base_powder", "legion_shop_enhancer"):
+        _purchase_legion_shop_item(args, points, item_action, bounds)
+    perform_click(*points["legion_shop_close"], args.backend, bounds)
+    print("legion shop purchases complete: purchased three items and closed shop", flush=True)
+    return 0
+
 def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     """Run the verified daily-cut, foreign-sweep, and legion-reward sequence."""
     if args.sweep_times < 1:
@@ -68,7 +111,15 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
             phase_progress=getattr(args, "phase_progress", None),
         )
     )
-    print("legion daily rewards complete: attempted daily cut and full foreign-challenge rewards")
+    command_legion_shop_purchases(
+        argparse.Namespace(
+            mock_bounds=bounds,
+            backend=args.backend,
+            dry_run=False,
+            phase_progress=getattr(args, "phase_progress", None),
+        )
+    )
+    print("legion daily rewards complete: attempted daily cut, foreign-challenge rewards, and shop purchases")
     return 0
 def command_legion_reward_claims(args: argparse.Namespace) -> int:
     if args.sweep_times < 1:

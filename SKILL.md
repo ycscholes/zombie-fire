@@ -31,12 +31,32 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legi
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 0,33,508,949 legion-sweep-batch --times 2 --dry-run
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-shop-purchases
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-shop
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py shop-training-hall
 ```
 
 The helper maps the normal `508x949` Computer Use coordinate space to the
 current front WeChat window. It aborts when the front app, window size, or
 aspect ratio does not look like the game window.
+
+### Coordinate mapping (verified on macOS WeChat)
+
+Computer Use screenshot/click coordinates are relative to the captured game
+window. `Action` coordinates use that same canonical `508x949` window-local
+space. CoreGraphics clicks require global screen coordinates, so the helper
+adds the calibrated window origin exactly once:
+
+```text
+screen_x = bounds.x + round(action.x * bounds.width / 508)
+screen_y = bounds.y + round(action.y * bounds.height / 949)
+```
+
+For the fitted window `bounds=(2,33,508,949)`, Computer Use target `(358,513)`
+is represented as `Action(358,513)` and delivered to CoreGraphics at
+`(360,546)`. Do not manually add the title-bar offset to an `Action` value;
+`scale_point()` adds the window origin when producing the final screen point.
+Use `dry-run click <action>` to inspect both values before a live click.
 
 Every helper click waits a random `0.4` to `0.6` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
@@ -290,11 +310,31 @@ attempt -> `异域挑战` sweep -> visible reward rows.
    `reward_dismiss`. Stop if the boss is not open, the confirm prompt is not the
    free historical-damage prompt, or the count does not change.
 4. Do not click legion ads/videos, strengthening costs, task pages, donation,
-   hall, shop, or unclear actions.
+   hall, unverified shop offers, or unclear actions.
 5. Token budget guard: if any legion helper coordinate misses once, do one
    Computer Use recovery click, update the helper, and stop that legion
    sub-flow. Do not spend repeated screenshots trying alternative points in the
    same daily run.
+
+### Legion Shop Purchase Subtask
+
+Use `legion-shop-purchases` when starting from the legion hub. It opens the
+legion shop and reuses the canvas-list drag implementation from the base
+training-hall flow, performing one segmented CoreGraphics drag with the
+calibrated `legion_shop_drag_start` and `legion_shop_drag_end` points. The
+command then purchases the visible gun blueprint, base powder, and enhancer at
+maximum quantity, dismissing each reward and purchase modal before closing the
+shop. Only run it after verifying the three direct-cost purchase rows are
+visible and safe.
+
+### Training Hall Play-Shop Purchase Subtask
+
+Use `base-training-hall-shop` when already on the training hall page. It opens
+玩法商店, purchases 基地熔粉, 枪械图纸, 基建耗材, and 随机技能手册 at maximum
+quantity, dismisses each reward popup and closes each purchase modal, then
+closes the play shop. It uses the battlefield bottom drag and the horizontal
+tab-strip drag before entering the requested tabs. Only run it after verifying
+the four visible purchase actions are direct-cost and safe.
 
 ## Journey
 

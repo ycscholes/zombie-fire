@@ -26,6 +26,7 @@ from scripts.zombie_tasks import shop as _shop
 _TASK_MODULES = (_base, _daily, _home, _journey, _legion, _patrol, _shop)
 _TASK_HANDLERS = {
     "command_base_training_hall": _base.command_base_training_hall,
+    "command_base_training_hall_shop": _base.command_base_training_hall_shop,
     "command_daily_rewards": _daily.command_daily_rewards,
     "command_calendar_claim": _home.command_calendar_claim,
     "command_mail_claim": _home.command_mail_claim,
@@ -34,6 +35,7 @@ _TASK_HANDLERS = {
     "command_legion_daily_rewards": _legion.command_legion_daily_rewards,
     "command_legion_reward_claims": _legion.command_legion_reward_claims,
     "command_legion_sweep_batch": _legion.command_legion_sweep_batch,
+    "command_legion_shop_purchases": _legion.command_legion_shop_purchases,
     "command_patrol_ads_batch": _patrol.command_patrol_ads_batch,
     "command_patrol_ads_from_home": _patrol.command_patrol_ads_from_home,
     "command_patrol_full_from_home": _patrol.command_patrol_full_from_home,
@@ -127,6 +129,7 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
 
 
 def command_base_training_hall(args): return _task_call(_base, "command_base_training_hall", args)
+def command_base_training_hall_shop(args): return _task_call(_base, "command_base_training_hall_shop", args)
 def command_daily_rewards(args): return _task_call(_daily, "command_daily_rewards", args)
 def command_calendar_claim(args): return _task_call(_home, "command_calendar_claim", args)
 def command_mail_claim(args): return _task_call(_home, "command_mail_claim", args)
@@ -135,6 +138,7 @@ def command_journey_resource_claim(args): return _task_call(_journey, "command_j
 def command_legion_daily_rewards(args): return _task_call(_legion, "command_legion_daily_rewards", args)
 def command_legion_reward_claims(args): return _task_call(_legion, "command_legion_reward_claims", args)
 def command_legion_sweep_batch(args): return _task_call(_legion, "command_legion_sweep_batch", args)
+def command_legion_shop_purchases(args): return _task_call(_legion, "command_legion_shop_purchases", args)
 def command_patrol_ads_batch(args): return _task_call(_patrol, "command_patrol_ads_batch", args)
 def command_patrol_ads_from_home(args): return _task_call(_patrol, "command_patrol_ads_from_home", args)
 def command_patrol_full_from_home(args): return _task_call(_patrol, "command_patrol_full_from_home", args)
@@ -394,7 +398,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     patrol_ads_parser.add_argument("--times", type=int, default=5)
     patrol_ads_parser.add_argument("--ad-wait", type=non_negative_float, default=33.0)
-    patrol_ads_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    patrol_ads_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     patrol_ads_parser.add_argument("--between", type=non_negative_float, default=0.8)
     patrol_ads_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_ads_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -406,16 +410,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     patrol_full_parser.add_argument("--quick-times", type=int, default=3)
     patrol_full_parser.add_argument("--ad-times", type=int, default=5)
-    patrol_full_parser.add_argument("--panel-wait", type=non_negative_float, default=2.0)
-    patrol_full_parser.add_argument("--claim-wait", type=non_negative_float, default=2.0)
+    patrol_full_parser.add_argument("--panel-wait", type=non_negative_float, default=1.0)
+    patrol_full_parser.add_argument("--claim-wait", type=non_negative_float, default=1.0)
     patrol_full_parser.add_argument("--dismiss-wait", type=non_negative_float, default=1.0)
-    patrol_full_parser.add_argument("--quick-reward-wait", type=non_negative_float, default=4.5)
-    patrol_full_parser.add_argument("--quick-between", type=non_negative_float, default=2.0)
+    patrol_full_parser.add_argument("--quick-reward-wait", type=non_negative_float, default=1.0)
+    patrol_full_parser.add_argument("--quick-between", type=non_negative_float, default=1.0)
     patrol_full_parser.add_argument("--ad-wait", type=non_negative_float, default=33.0)
-    patrol_full_parser.add_argument("--ad-close-wait", type=non_negative_float, default=1.2)
+    patrol_full_parser.add_argument("--ad-close-wait", type=non_negative_float, default=1.0)
     patrol_full_parser.add_argument("--ad-reward-wait", type=non_negative_float, default=1.0)
-    patrol_full_parser.add_argument("--ad-between", type=non_negative_float, default=2.0)
-    patrol_full_parser.add_argument("--close-wait", type=non_negative_float, default=1.5)
+    patrol_full_parser.add_argument("--ad-between", type=non_negative_float, default=1.0)
+    patrol_full_parser.add_argument("--close-wait", type=non_negative_float, default=1.0)
     patrol_full_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
     patrol_full_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_full_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -428,7 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
     patrol_ads_home_parser.add_argument("--times", type=int, default=5)
     patrol_ads_home_parser.add_argument("--panel-wait", type=non_negative_float, default=1.0)
     patrol_ads_home_parser.add_argument("--ad-wait", type=non_negative_float, default=33.0)
-    patrol_ads_home_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    patrol_ads_home_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     patrol_ads_home_parser.add_argument("--between", type=non_negative_float, default=0.8)
     patrol_ads_home_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_ads_home_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -439,7 +443,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="blindly run normal quick-patrol cycles without screenshots; use only after the count is verified",
     )
     patrol_quick_parser.add_argument("--times", type=int, required=True)
-    patrol_quick_parser.add_argument("--reward-wait", type=non_negative_float, default=2.2)
+    patrol_quick_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     patrol_quick_parser.add_argument("--between", type=non_negative_float, default=0.8)
     patrol_quick_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_quick_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -451,7 +455,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mail_parser.add_argument("--menu-wait", type=non_negative_float, default=1.0)
     mail_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    mail_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    mail_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     mail_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     mail_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     mail_parser.set_defaults(func=command_mail_claim)
@@ -461,7 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="open calendar, claim its visible free gift, dismiss the reward, and close",
     )
     calendar_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    calendar_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    calendar_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     calendar_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     calendar_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     calendar_parser.set_defaults(func=command_calendar_claim)
@@ -471,7 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="open welfare, dismiss only its automatic free reward, and return without recharge tabs",
     )
     welfare_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    welfare_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    welfare_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     welfare_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     welfare_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     welfare_parser.set_defaults(func=command_welfare_claim)
@@ -493,6 +497,14 @@ def build_parser() -> argparse.ArgumentParser:
     base_parser.add_argument("--skip-scroll", action="store_true", help="use after Computer Use has scrolled to the training hall bottom")
     base_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     base_parser.set_defaults(func=command_base_training_hall)
+
+    base_shop_parser = sub.add_parser(
+        "base-training-hall-shop",
+        help="from the training hall, purchase the four play-shop items at maximum quantity",
+    )
+    base_shop_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    base_shop_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    base_shop_parser.set_defaults(func=command_base_training_hall_shop)
 
     shop_parser = sub.add_parser(
         "shop-training-hall",
@@ -525,9 +537,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     legion_daily_parser.add_argument("--sweep-times", type=int, default=2)
     legion_daily_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_daily_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.2)
+    legion_daily_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.0)
     legion_daily_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
-    legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
+    legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=1.0)
     legion_daily_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     legion_daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_daily_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -539,9 +551,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     legion_reward_parser.add_argument("--sweep-times", type=int, default=2)
     legion_reward_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_reward_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.2)
+    legion_reward_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=1.0)
     legion_reward_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
-    legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=4.0)
+    legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=1.0)
     legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_reward_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -553,11 +565,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     legion_sweep_parser.add_argument("--times", type=int, required=True)
     legion_sweep_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_sweep_parser.add_argument("--reward-wait", type=non_negative_float, default=1.2)
+    legion_sweep_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
     legion_sweep_parser.add_argument("--between", type=non_negative_float, default=0.6)
     legion_sweep_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_sweep_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_sweep_parser.set_defaults(func=command_legion_sweep_batch)
+
+    legion_shop_parser = sub.add_parser(
+        "legion-shop-purchases",
+        help="open the legion shop and scroll its purchase list to the bottom",
+    )
+    legion_shop_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    legion_shop_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    legion_shop_parser.set_defaults(func=command_legion_shop_purchases)
 
     test_parser = sub.add_parser("self-test", help="run non-clicking internal checks")
     test_parser.set_defaults(func=command_self_test)

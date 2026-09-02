@@ -61,6 +61,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
             patch.object(zombie_click, "sleep_between"),
             patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
+            patch.object(zombie_click._base, "command_base_training_hall_shop", return_value=0) as play_shop,
         ):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -80,6 +81,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("reward_dismiss"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
         ])
         log = output.getvalue()
+        play_shop.assert_called_once()
         for action in (
             "base_tab", "cafeteria", "cafeteria_claim", "training_reward_dismiss", "cafeteria_back", "training_hall",
             "global_rescue_challenge", "global_rescue_free", "training_hall_back", "scroll_to_bottom",
@@ -101,9 +103,11 @@ class BaseTrainingHallTests(unittest.TestCase):
             patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1]),
             patch.object(zombie_click, "sleep_between"),
             patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
+            patch.object(zombie_click._base, "command_base_training_hall_shop", return_value=0) as play_shop,
         ):
             self.assertEqual(zombie_click.command_base_training_hall(args), 0)
 
+        play_shop.assert_called_once()
         point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
         self.assertEqual(events[:10], [
             point("base_tab"), point("cafeteria"), point("cafeteria_claim"),
@@ -171,6 +175,138 @@ class ShopTrainingHallTests(unittest.TestCase):
             (zombie_click.ACTIONS["shop_resource_gold600_free"].x, zombie_click.ACTIONS["shop_resource_gold600_free"].y),
             (255, 605),
         )
+
+
+class BaseTrainingHallShopTests(unittest.TestCase):
+    def test_play_shop_parser_is_registered(self) -> None:
+        args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
+        self.assertEqual(args.command, "base-training-hall-shop")
+
+    def test_play_shop_route_starts_in_training_hall_and_completes_four_purchases(self) -> None:
+        args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[object] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1]),
+            patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda _args, *names: events.append(("drag", *names))),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_base_training_hall_shop(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        dismiss = lambda name: (point(name)[0], point(name)[1], "dismiss")
+        self.assertEqual(events, [
+            point("play_shop"),
+            point("play_shop_enhancer"), point("play_shop_max"), point("play_shop_buy"),
+            dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
+            point("play_shop_battle_tab"), ("drag", "play_shop_battle_drag_start", "play_shop_battle_drag_end"),
+            point("play_shop_gun_blueprint"), point("play_shop_max"), point("play_shop_buy"),
+            dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
+            ("drag", "play_shop_tabs_drag_start", "play_shop_tabs_drag_end"), point("play_shop_element_tab"),
+            point("play_shop_base_material"), point("play_shop_max"), point("play_shop_buy"),
+            dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
+            point("play_shop_legion_tab"), point("play_shop_skill_manual"), point("play_shop_max"),
+            point("play_shop_buy"), dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
+            point("play_shop_close"),
+        ])
+
+    def test_play_shop_dry_run_does_not_scroll_or_click(self) -> None:
+        with (
+            patch.object(zombie_click, "focus_game_window_at_start") as focus,
+            patch.object(zombie_click, "perform_click") as click,
+            patch.object(zombie_click, "scroll_to_bottom") as drag,
+        ):
+            self.assertEqual(
+                zombie_click.main(["--mock-bounds", "2,33,508,949", "base-training-hall-shop", "--dry-run"]),
+                0,
+            )
+        focus.assert_not_called()
+        click.assert_not_called()
+        drag.assert_not_called()
+
+    def test_play_shop_coordinates_match_the_verified_content_space(self) -> None:
+        expected = {
+            "play_shop": (407, 145),
+            "play_shop_enhancer": (358, 513),
+            "play_shop_battle_tab": (215, 798),
+            "play_shop_gun_blueprint": (358, 641),
+            "play_shop_tabs_drag_start": (345, 798),
+            "play_shop_tabs_drag_end": (145, 798),
+            "play_shop_element_tab": (280, 798),
+            "play_shop_base_material": (358, 644),
+            "play_shop_max": (345, 566),
+            "play_shop_buy": (252, 616),
+            "play_shop_modal_close": (401, 350),
+            "play_shop_close": (426, 214),
+        }
+        for name, point in expected.items():
+            self.assertEqual((zombie_click.ACTIONS[name].x, zombie_click.ACTIONS[name].y), point, name)
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        self.assertEqual(zombie_click.scale_point(zombie_click.ACTIONS["play_shop_enhancer"], bounds), (360, 546))
+        self.assertEqual((zombie_click.ACTIONS["play_shop_battle_drag_start"].x, zombie_click.ACTIONS["play_shop_battle_drag_start"].y), (252, 733))
+        self.assertEqual((zombie_click.ACTIONS["play_shop_battle_drag_end"].x, zombie_click.ACTIONS["play_shop_battle_drag_end"].y), (252, 283))
+
+
+class LegionShopTests(unittest.TestCase):
+    def test_legion_shop_parser_is_registered(self) -> None:
+        args = zombie_click.build_parser().parse_args(["legion-shop-purchases"])
+        self.assertEqual(args.command, "legion-shop-purchases")
+
+    def test_legion_shop_route_reuses_one_segmented_bottom_drag_and_completes_purchases(self) -> None:
+        args = zombie_click.build_parser().parse_args(["legion-shop-purchases"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[object] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1]),
+            patch.object(zombie_click._legion, "_base_scroll_to_bottom", side_effect=lambda *_: events.append("drag")),
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_legion_shop_purchases(args), 0)
+
+        self.assertEqual(events.count("drag"), 1)
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            events,
+            [
+                point("legion_shop"),
+                "drag",
+                point("legion_shop_gun_blueprint"),
+                point("legion_shop_max"),
+                point("legion_shop_buy"),
+                (point("legion_shop_reward_dismiss")[0], point("legion_shop_reward_dismiss")[1], "dismiss"),
+                point("legion_shop_modal_close"),
+                point("legion_shop_base_powder"),
+                point("legion_shop_max"),
+                point("legion_shop_buy"),
+                (point("legion_shop_reward_dismiss")[0], point("legion_shop_reward_dismiss")[1], "dismiss"),
+                point("legion_shop_modal_close"),
+                point("legion_shop_enhancer"),
+                point("legion_shop_max"),
+                point("legion_shop_buy"),
+                (point("legion_shop_reward_dismiss")[0], point("legion_shop_reward_dismiss")[1], "dismiss"),
+                point("legion_shop_modal_close"),
+                point("legion_shop_close"),
+            ],
+        )
+
+    def test_legion_shop_drag_coordinates_match_existing_canvas_drag(self) -> None:
+        self.assertEqual(
+            (zombie_click.ACTIONS["legion_shop_drag_start"].x, zombie_click.ACTIONS["legion_shop_drag_start"].y),
+            (252, 760),
+        )
+        self.assertEqual(
+            (zombie_click.ACTIONS["legion_shop_drag_end"].x, zombie_click.ACTIONS["legion_shop_drag_end"].y),
+            (252, 120),
+        )
+
+    def test_legion_shop_purchase_coordinates_are_calibrated(self) -> None:
+        self.assertEqual((zombie_click.ACTIONS["legion_shop_gun_blueprint"].x, zombie_click.ACTIONS["legion_shop_gun_blueprint"].y), (356, 436))
+        self.assertEqual((zombie_click.ACTIONS["legion_shop_base_powder"].x, zombie_click.ACTIONS["legion_shop_base_powder"].y), (356, 581))
+        self.assertEqual((zombie_click.ACTIONS["legion_shop_enhancer"].x, zombie_click.ACTIONS["legion_shop_enhancer"].y), (356, 726))
 
 
 class FocusEligibilityTests(unittest.TestCase):
@@ -449,11 +585,35 @@ class FocusEligibilityTests(unittest.TestCase):
             zombie_click.sleep_between(1.0)
             zombie_click.wait_after_click()
 
-        self.assertEqual(sleep.call_args_list[0].args, (2.0,))
+        self.assertEqual(sleep.call_args_list[0].args, (2.5,))
         self.assertEqual(sleep.call_args_list[1].args, (0.5,))
         post_click_wait = sleep.call_args_list[2].args[0]
         self.assertGreaterEqual(post_click_wait, 0.4)
         self.assertLessEqual(post_click_wait, 0.6)
+
+    def test_business_wait_defaults_are_capped_except_ad_wait(self) -> None:
+        parser = zombie_click.build_parser()
+        expected = {
+            "patrol-ads-batch": {"ad_wait": 33.0, "reward_wait": 1.0},
+            "patrol-full-from-home": {
+                "panel_wait": 1.0, "claim_wait": 1.0, "quick_reward_wait": 1.0,
+                "quick_between": 1.0, "ad_wait": 33.0, "ad_close_wait": 1.0,
+                "ad_between": 1.0, "close_wait": 1.0,
+            },
+            "patrol-ads-from-home": {"ad_wait": 33.0, "reward_wait": 1.0},
+            "patrol-quick-batch": {"reward_wait": 1.0},
+            "mail-claim": {"reward_wait": 1.0},
+            "calendar-claim": {"reward_wait": 1.0},
+            "welfare-claim": {"reward_wait": 1.0},
+            "legion-daily-rewards": {"sweep_reward_wait": 1.0, "reward_page_wait": 1.0},
+            "legion-reward-claims": {"sweep_reward_wait": 1.0, "reward_page_wait": 1.0},
+            "legion-sweep-batch": {"reward_wait": 1.0},
+        }
+        for command, values in expected.items():
+            required_times = {"patrol-quick-batch", "legion-sweep-batch"}
+            args = parser.parse_args([command] + (["--times", "1"] if command in required_times else []))
+            for name, value in values.items():
+                self.assertEqual(getattr(args, name), value, (command, name))
 
     def test_default_patrol_ad_wait_is_33_seconds(self) -> None:
         parser = zombie_click.build_parser()
@@ -540,7 +700,7 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge_back"], bounds),
             ],
         )
-        self.assertEqual(waits, [0.8, 1.2, 0.6, 0.8, 1.2, 4.0])
+        self.assertEqual(waits, [0.8, 1.0, 0.6, 0.8, 1.0, 1.0])
 
     def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
         with self.assertRaises(SystemExit):
@@ -559,6 +719,7 @@ class FocusEligibilityTests(unittest.TestCase):
             ),
             patch.object(zombie_click, "sleep_between"),
             patch.object(zombie_click, "command_legion_reward_claims", return_value=0) as claims,
+            patch.object(zombie_click._legion, "command_legion_shop_purchases", return_value=0) as shop,
         ):
             self.assertEqual(zombie_click.command_legion_daily_rewards(args), 0)
 
@@ -581,6 +742,8 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(delegated.sweep_between, args.sweep_between)
         self.assertEqual(delegated.reward_page_wait, args.reward_page_wait)
         self.assertEqual(delegated.reward_wait, args.reward_wait)
+        shop.assert_called_once()
+        self.assertIs(shop.call_args.args[0].mock_bounds, bounds)
 
     def test_cgclick_cache_paths_are_stable(self) -> None:
         self.assertEqual(zombie_click.CGCLICK_BIN_PATH.parent, zombie_click.CGCLICK_CACHE_DIR)
