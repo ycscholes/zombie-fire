@@ -60,7 +60,7 @@ Use `dry-run click <action>` to inspect both values before a live click.
 
 Every helper click waits a random `0.4` to `0.6` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
-Reward-popup dismiss clicks use a fixed 1-second wait after dismissal before
+Reward-popup dismiss clicks use a fixed 0.5-second wait after dismissal before
 the next operation.
 
 Every click backend uses the same complete tap semantics: move to the target,

@@ -59,7 +59,7 @@ ACTIONS: Dict[str, Action] = {
     "battle_modal_drag_start": Action(250, 580, "battlefield contest list lower drag point"),
     "battle_modal_drag_end": Action(250, 330, "battlefield contest list upper drag point"),
     "battle_sweep_last": Action(375, 578, "last battlefield contest sweep"),
-    "battle_modal_close": Action(425, 228, "close battlefield contest modal"),
+    "battle_modal_close": Action(425, 258, "close battlefield contest modal"),
     "battle_page_back": Action(84, 875, "return from battlefield contest to training hall"),
     "element_challenge": Action(322, 835, "element trial challenge"),
     "core_trial": Action(255, 380, "core trial entry"),

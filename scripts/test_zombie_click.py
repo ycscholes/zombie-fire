@@ -568,7 +568,7 @@ class FocusEligibilityTests(unittest.TestCase):
 
         dispatch.assert_called_once_with("cgclick", 10, 20)
 
-    def test_perform_dismiss_click_waits_one_second_after_dismissal(self) -> None:
+    def test_perform_dismiss_click_waits_half_second_after_dismissal(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         with (
             patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
@@ -577,7 +577,7 @@ class FocusEligibilityTests(unittest.TestCase):
             self.assertEqual(zombie_click.perform_dismiss_click(10, 20, "cgclick", bounds), "cgclick")
 
         click.assert_called_once_with(10, 20, "cgclick", bounds, False)
-        sleep.assert_called_once_with(1.0)
+        sleep.assert_called_once_with(0.5)
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
@@ -588,26 +588,26 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(sleep.call_args_list[0].args, (2.5,))
         self.assertEqual(sleep.call_args_list[1].args, (0.5,))
         post_click_wait = sleep.call_args_list[2].args[0]
-        self.assertGreaterEqual(post_click_wait, 0.4)
-        self.assertLessEqual(post_click_wait, 0.6)
+        self.assertGreaterEqual(post_click_wait, 0.3)
+        self.assertLessEqual(post_click_wait, 0.5)
 
     def test_business_wait_defaults_are_capped_except_ad_wait(self) -> None:
         parser = zombie_click.build_parser()
         expected = {
-            "patrol-ads-batch": {"ad_wait": 33.0, "reward_wait": 1.0},
+            "patrol-ads-batch": {"ad_wait": 33.0, "reward_wait": 0.5},
             "patrol-full-from-home": {
-                "panel_wait": 1.0, "claim_wait": 1.0, "quick_reward_wait": 1.0,
-                "quick_between": 1.0, "ad_wait": 33.0, "ad_close_wait": 1.0,
-                "ad_between": 1.0, "close_wait": 1.0,
+                "panel_wait": 0.5, "claim_wait": 0.5, "quick_reward_wait": 0.5,
+                "quick_between": 0.5, "ad_wait": 33.0, "ad_close_wait": 0.5,
+                "ad_between": 0.5, "close_wait": 0.5,
             },
-            "patrol-ads-from-home": {"ad_wait": 33.0, "reward_wait": 1.0},
-            "patrol-quick-batch": {"reward_wait": 1.0},
-            "mail-claim": {"reward_wait": 1.0},
-            "calendar-claim": {"reward_wait": 1.0},
-            "welfare-claim": {"reward_wait": 1.0},
-            "legion-daily-rewards": {"sweep_reward_wait": 1.0, "reward_page_wait": 1.0},
-            "legion-reward-claims": {"sweep_reward_wait": 1.0, "reward_page_wait": 1.0},
-            "legion-sweep-batch": {"reward_wait": 1.0},
+            "patrol-ads-from-home": {"ad_wait": 33.0, "reward_wait": 0.5},
+            "patrol-quick-batch": {"reward_wait": 0.5},
+            "mail-claim": {"reward_wait": 0.5},
+            "calendar-claim": {"reward_wait": 0.5},
+            "welfare-claim": {"reward_wait": 0.5},
+            "legion-daily-rewards": {"sweep_reward_wait": 0.5, "reward_page_wait": 0.5},
+            "legion-reward-claims": {"sweep_reward_wait": 0.5, "reward_page_wait": 0.5},
+            "legion-sweep-batch": {"reward_wait": 0.5},
         }
         for command, values in expected.items():
             required_times = {"patrol-quick-batch", "legion-sweep-batch"}
@@ -621,7 +621,7 @@ class FocusEligibilityTests(unittest.TestCase):
             args = parser.parse_args([command])
             self.assertEqual(args.ad_wait, 33.0)
 
-    def test_reward_dismiss_clicks_once_and_waits_one_second(self) -> None:
+    def test_reward_dismiss_clicks_once_and_waits_half_second(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         points = {"reward_dismiss": (252, 853)}
         with (
@@ -636,7 +636,7 @@ class FocusEligibilityTests(unittest.TestCase):
             )
 
         click.assert_called_once_with(252, 853, "cgclick", bounds, False)
-        sleep.assert_called_once_with(1.0)
+        sleep.assert_called_once_with(0.5)
 
     def test_each_real_click_refocuses_before_verifying_and_dispatching(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -700,7 +700,7 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge_back"], bounds),
             ],
         )
-        self.assertEqual(waits, [0.8, 1.0, 0.6, 0.8, 1.0, 1.0])
+        self.assertEqual(waits, [0.8, 0.5, 0.6, 0.8, 0.5, 0.5])
 
     def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
         with self.assertRaises(SystemExit):

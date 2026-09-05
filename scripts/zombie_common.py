@@ -32,10 +32,10 @@ MIN_HEIGHT = 760
 ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
 # Keep a short randomized pause between helper clicks.
-POST_CLICK_WAIT_MIN = 0.4
-POST_CLICK_WAIT_MAX = 0.6
-DISMISS_POST_WAIT_SECONDS = 1.0
-MIN_WAIT_SECONDS = 0.5
+POST_CLICK_WAIT_MIN = 0.3
+POST_CLICK_WAIT_MAX = 0.5
+DISMISS_POST_WAIT_SECONDS = 0.5
+MIN_WAIT_SECONDS = 0.3
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
 WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
@@ -598,7 +598,7 @@ def perform_dismiss_click(
     backend: str,
     expected_bounds: Bounds,
 ) -> str:
-    """Dismiss a reward popup and wait exactly one second before continuing."""
+    """Dismiss a reward popup and wait exactly half a second before continuing."""
     selected_backend = perform_click(x, y, backend, expected_bounds, False)
     time.sleep(DISMISS_POST_WAIT_SECONDS)
     return selected_backend
