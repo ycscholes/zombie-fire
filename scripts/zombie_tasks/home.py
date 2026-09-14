@@ -75,7 +75,14 @@ def command_calendar_claim(args: argparse.Namespace) -> int:
 def command_welfare_claim(args: argparse.Namespace) -> int:
     """Claim the automatic free welfare popup and return without visiting recharge tabs."""
     bounds = prepare_command_bounds(args)
-    points = scaled_points(bounds, "welfare_cluster", "welfare_reward_popup_dismiss", "back_bottom_left")
+    points = scaled_points(
+        bounds,
+        "welfare_menu_drag_start",
+        "welfare_menu_drag_end",
+        "welfare_entry",
+        "welfare_reward_popup_dismiss",
+        "back_bottom_left",
+    )
     if args.dry_run:
         print(
             "welfare claim dry-run: "
@@ -83,9 +90,15 @@ def command_welfare_claim(args: argparse.Namespace) -> int:
         )
         return 0
 
-    backend = perform_click(*points["welfare_cluster"], args.backend, bounds)
+    perform_drag(
+        *points["welfare_menu_drag_start"],
+        *points["welfare_menu_drag_end"],
+        bounds,
+    )
+    sleep_between(args.open_wait)
+    backend = perform_click(*points["welfare_entry"], args.backend, bounds)
     set_phase_state(args, "welfare_opened")
-    print(f"welfare claim: opened welfare cluster via {backend}", flush=True)
+    print(f"welfare claim: dragged right-side menu and opened welfare via {backend}", flush=True)
     sleep_between(args.open_wait)
     backend = perform_dismiss_click(*points["welfare_reward_popup_dismiss"], args.backend, bounds)
     print(f"welfare claim: dismissed automatic free reward via {backend}", flush=True)

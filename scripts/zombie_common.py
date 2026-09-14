@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import builtins
 import json
 import math
 import os
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Tuple
@@ -34,13 +36,14 @@ ASPECT_MAX = 0.68
 # Keep a short randomized pause between helper clicks.
 POST_CLICK_WAIT_MIN = 0.3
 POST_CLICK_WAIT_MAX = 0.5
-DISMISS_POST_WAIT_SECONDS = 0.5
 MIN_WAIT_SECONDS = 0.3
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
 WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
 POST_AD_READY_TIMEOUT_SECONDS = 8.0
 POST_AD_READY_POLL_SECONDS = 0.4
+SESSION_AUDIT_EVERY_OPERATIONS = 3
+SESSION_AUDIT_MAX_AGE_SECONDS = 2.0
 CLICK_BACKENDS = ("auto", "cgclick", "quartz", "cliclick", "system-events")
 NON_OPERATING_COMMANDS = frozenset({"list", "state", "self-test", "dry-run"})
 WECHAT_NAMES = {"微信", "WeChat", "Weixin", "WeApp", "小程序"}
@@ -130,6 +133,18 @@ int main(int argc, char **argv) {
 """
 
 
+def print(*values, sep: str = " ", end: str = "\n", file=None, flush: bool = False) -> None:
+    """Print console output with a local HH:MM prefix on every non-empty line."""
+    target = sys.stdout if file is None else file
+    message = sep.join(str(value) for value in values)
+    lines = message.splitlines() or [""]
+    timestamped = "\n".join(
+        f"{datetime.now():%H:%M} {line}" if line else ""
+        for line in lines
+    )
+    builtins.print(timestamped, end=end, file=target, flush=flush)
+
+
 @dataclass(frozen=True)
 class Bounds:
     app_name: str
@@ -162,6 +177,39 @@ class AdReturnError(WindowStateError):
 
 class PhaseRecoveryError(WindowStateError):
     pass
+
+
+@dataclass
+class InputSession:
+    """Per-command window proof that permits a short run of safe inputs."""
+
+    bounds: Bounds | None = None
+    operations_since_audit: int = 0
+    last_audit_at: float = 0.0
+
+
+_input_session: InputSession | None = None
+
+
+def start_input_session() -> None:
+    """Enable short-lived verification reuse for one CLI command."""
+    global _input_session
+    _input_session = InputSession()
+
+
+def bind_input_session(bounds: Bounds) -> None:
+    """Record a just-focused, calibrated game window for the active command."""
+    if _input_session is None:
+        return
+    _input_session.bounds = bounds
+    _input_session.operations_since_audit = 0
+    _input_session.last_audit_at = time.monotonic()
+
+
+def end_input_session() -> None:
+    """Discard command-local window proof so it cannot leak to a later run."""
+    global _input_session
+    _input_session = None
 
 
 @dataclass
@@ -350,6 +398,7 @@ def prepare_command_bounds(args: argparse.Namespace) -> Bounds:
         return bounds
     bounds = ensure_valid_game_bounds(bounds)
     focus_game_window(bounds)
+    bind_input_session(bounds)
     return bounds
 
 
@@ -567,6 +616,45 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
     return (backend,)
 
 
+def log_operation(kind: str, status: str, details: str) -> None:
+    """Write an auditable result for one physical input operation."""
+    print(f"operation: {kind} status={status} {details}", flush=True)
+
+
+def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float]:
+    """Use a bounded session audit when safe, otherwise run the full guard."""
+    started_at = time.monotonic()
+    session = _input_session
+    if (
+        not retry
+        and session is not None
+        and session.bounds == expected_bounds
+        and session.operations_since_audit < SESSION_AUDIT_EVERY_OPERATIONS
+        and started_at - session.last_audit_at < SESSION_AUDIT_MAX_AGE_SECONDS
+    ):
+        session.operations_since_audit += 1
+        return "session", (time.monotonic() - started_at) * 1000
+
+    mode = "full" if retry or session is None or session.bounds != expected_bounds else "audit"
+    try:
+        if mode == "full":
+            focus_game_window(expected_bounds)
+        ensure_unchanged_game_window(expected_bounds)
+    except WindowStateError:
+        # A short-session check discovered a focus loss. Re-establish the
+        # calibrated game window before allowing the one normal retry path.
+        if mode != "audit":
+            raise
+        focus_game_window(expected_bounds)
+        ensure_unchanged_game_window(expected_bounds)
+        mode = "recovery"
+
+    if session is not None and session.bounds == expected_bounds:
+        session.operations_since_audit = 1
+        session.last_audit_at = time.monotonic()
+    return mode, (time.monotonic() - started_at) * 1000
+
+
 def perform_click(
     x: int,
     y: int,
@@ -577,17 +665,28 @@ def perform_click(
     if expected_bounds is None:
         raise ClickDeliveryError("real clicks require calibrated game-window bounds")
     failures = []
-    for _attempt in range(2):
-        # 每次投递前重新聚焦游戏；弹窗或广告可能在两次操作之间抢走焦点。
-        focus_game_window(expected_bounds)
-        # 聚焦后仍须确认校准窗口未移动或缩放，避免固定坐标误点。
-        ensure_unchanged_game_window(expected_bounds)
+    for attempt_index in range(2):
+        mode, preflight_ms = input_preflight(expected_bounds, retry=attempt_index > 0)
         for candidate in click_backend_candidates(backend):
+            delivery_started_at = time.monotonic()
             clicked, reason = try_click_backend(candidate, x, y)
+            delivery_ms = (time.monotonic() - delivery_started_at) * 1000
             if clicked:
+                log_operation(
+                    "click",
+                    "success",
+                    f"backend={candidate} point=({x},{y}) mode={mode} "
+                    f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}",
+                )
                 if wait_after:
                     wait_after_click()
                 return candidate
+            log_operation(
+                "click",
+                "failed",
+                f"backend={candidate} point=({x},{y}) mode={mode} "
+                f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f} reason={reason}",
+            )
             failures.append(f"{candidate}: {reason}")
     raise ClickDeliveryError("click backend failed: " + "; ".join(failures))
 
@@ -598,10 +697,47 @@ def perform_dismiss_click(
     backend: str,
     expected_bounds: Bounds,
 ) -> str:
-    """Dismiss a reward popup and wait exactly half a second before continuing."""
-    selected_backend = perform_click(x, y, backend, expected_bounds, False)
-    time.sleep(DISMISS_POST_WAIT_SECONDS)
-    return selected_backend
+    """Dismiss a reward popup without adding a fixed post-dismiss wait."""
+    return perform_click(x, y, backend, expected_bounds, False)
+
+
+def perform_drag(
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    expected_bounds: Bounds | None = None,
+) -> None:
+    """Deliver one calibrated CoreGraphics drag and log its result."""
+    if expected_bounds is None:
+        raise ClickDeliveryError("real drags require calibrated game-window bounds")
+    mode, preflight_ms = input_preflight(expected_bounds)
+    delivery_started_at = time.monotonic()
+    try:
+        delivered = drag_cgclick_bin(x1, y1, x2, y2)
+    except Exception as exc:
+        reason = str(exc) or exc.__class__.__name__
+        log_operation(
+            "drag",
+            "failed",
+            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+            f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f} reason={reason}",
+        )
+        raise ClickDeliveryError(f"drag backend failed: {reason}") from exc
+    if not delivered:
+        log_operation(
+            "drag",
+            "failed",
+            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+            f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f} reason=unavailable",
+        )
+        raise ClickDeliveryError("drag backend unavailable")
+    log_operation(
+        "drag",
+        "success",
+        f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+        f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f}",
+    )
 
 
 def sleep_between(seconds: float) -> None:

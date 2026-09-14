@@ -81,6 +81,9 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
         else:
             bounds = ensure_valid_game_bounds(bounds)
         validate_bounds(bounds, allow_mock=False)
+        # The CLI startup gate already focused the game; after an optional fit,
+        # bind the final calibrated geometry for the short safe-click session.
+        bind_input_session(bounds)
     points = patrol_full_points(bounds)
     if args.dry_run:
         plan = {
@@ -137,25 +140,25 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             sleep_between(args.quick_between)
 
     sleep_between(args.ad_between)
-    for idx in range(args.ad_times):
-        backend = perform_click(*points["quick_patrol"], args.backend, bounds)
-        print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
-        sleep_between(args.ad_wait)
-        backend = perform_click(*points["ad_close_top"], args.backend, bounds)
-        print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
-        sleep_between(args.ad_close_wait)
-        sleep_between(args.ad_reward_wait)
-        ensure_game_ready_after_ad(bounds)
-        backend = dismiss_reward_once(
-            points,
-            args.backend,
-            bounds,
-            label=f"patrol full ad {idx + 1}/{args.ad_times}",
-        )
-        if idx + 1 < args.ad_times:
-            sleep_between(args.ad_between)
+    # for idx in range(args.ad_times):
+    #     backend = perform_click(*points["quick_patrol"], args.backend, bounds)
+    #     print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
+    #     sleep_between(args.ad_wait)
+    #     backend = perform_click(*points["ad_close_top"], args.backend, bounds)
+    #     print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
+    #     sleep_between(args.ad_close_wait)
+    #     sleep_between(args.ad_reward_wait)
+    #     ensure_game_ready_after_ad(bounds)
+    #     backend = dismiss_reward_once(
+    #         points,
+    #         args.backend,
+    #         bounds,
+    #         label=f"patrol full ad {idx + 1}/{args.ad_times}",
+    #     )
+    #     if idx + 1 < args.ad_times:
+    #         sleep_between(args.ad_between)
 
-    sleep_between(args.close_wait)
+    # sleep_between(args.close_wait)
     backend = perform_click(*points["patrol_close"], args.backend, bounds)
     print(
         "patrol full complete: "

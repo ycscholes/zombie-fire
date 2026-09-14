@@ -30,12 +30,9 @@ def scroll_to_bottom(
     if getattr(args, "skip_scroll", False):
         return
     bounds = args.active_bounds
-    focus_game_window(bounds)
-    ensure_unchanged_game_window(bounds)
     x1, y1 = scale_point(ACTIONS[start_action], bounds)
     x2, y2 = scale_point(ACTIONS[end_action], bounds)
-    if not drag_cgclick_bin(x1, y1, x2, y2):
-        raise ClickDeliveryError("CoreGraphics drag backend unavailable")
+    perform_drag(x1, y1, x2, y2, bounds)
     time.sleep(1.0)
 
 
@@ -98,7 +95,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         "terminal_crisis_sweep", "terminal_crisis_confirm", "battle_challenge", "battle_castle", "battle_modal_challenge",
         "battle_modal_drag_start", "battle_modal_drag_end", "battle_sweep_last", "reward_dismiss", "battle_modal_close",
         "training_hall_back", "element_challenge", "core_trial", "idle_button",
-        "idle_claim", "idle_cancel", "core_sweep", "core_sweep_ten", "core_trial_back",
+        "idle_claim", "idle_cancel", "core_sweep", "core_sweep_ten", "core_sweep_close", "core_trial_back",
         "element_back",
     )
     points = scaled_points(bounds, *names)
@@ -146,6 +143,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     _click_action(args, points, "core_sweep", bounds)
     _click_action(args, points, "core_sweep_ten", bounds)
     _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
+    _click_action(args, points, "core_sweep_close", bounds)
     _click_action(args, points, "core_trial_back", bounds)
     _click_action(args, points, "element_back", bounds)
     command_base_training_hall_shop(

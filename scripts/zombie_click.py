@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import builtins
 import json
 import pathlib
 import sys
@@ -47,13 +48,13 @@ _COMMON_BASE = {
     for name in (
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window", "ensure_unchanged_game_window", "focus_game_window",
-        "focus_game_window_at_start", "perform_click", "perform_dismiss_click",
+        "focus_game_window_at_start", "perform_click", "perform_dismiss_click", "perform_drag", "drag_cgclick_bin",
         "sleep_between", "ensure_game_ready_after_ad",
     )
 }
 _TASK_DEPENDENCIES = (
     "prepare_command_bounds", "perform_click", "perform_dismiss_click", "sleep_between",
-    "scale_point", "ensure_game_ready_after_ad", "focus_game_window",
+    "scale_point", "ensure_game_ready_after_ad", "focus_game_window", "perform_drag", "drag_cgclick_bin",
     "ACTIONS", "Bounds", "set_phase_state", "PhaseProgress", "PhaseResult",
     "recover_phase",
 )
@@ -74,7 +75,7 @@ def _sync_task_compat(module: object) -> None:
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window",
         "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "perform_click", "perform_dismiss_click", "sleep_between", "ensure_game_ready_after_ad",
+        "perform_click", "perform_dismiss_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
     ):
         value = globals().get(name)
         if hasattr(module, name) and value is not None and type(value).__module__.startswith("unittest.mock"):
@@ -90,7 +91,7 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window",
         "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "perform_click", "perform_dismiss_click", "sleep_between", "ensure_game_ready_after_ad",
+        "perform_click", "perform_dismiss_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
     )
     task_common_previous = {
         dependency: getattr(module, dependency)
@@ -151,7 +152,7 @@ def _common_call(name, *args, **kwargs):
         setattr(_common, dependency, value)
     for dependency in (
         "run_osascript", "time", "shutil", "subprocess", "click_cgclick_bin", "click_quartz", "click_cliclick",
-        "click_system_events", "try_click_backend", "front_window_snapshot", "classify_snapshot",
+        "click_system_events", "try_click_backend", "drag_cgclick_bin", "front_window_snapshot", "classify_snapshot",
         "get_bounds", "prepare_command_bounds", "fit_game_window", "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
         "ensure_unchanged_game_window", "wait_after_click", "sleep_between",
     ):
@@ -170,14 +171,16 @@ def _common_call(name, *args, **kwargs):
 def focus_game_window(*args, **kwargs): return _common_call("focus_game_window", *args, **kwargs)
 def focus_game_window_at_start(*args, **kwargs): return _common_call("focus_game_window_at_start", *args, **kwargs)
 def perform_click(*args, **kwargs): return _common_call("perform_click", *args, **kwargs)
+def start_input_session(*args, **kwargs): return _common_call("start_input_session", *args, **kwargs)
+def bind_input_session(*args, **kwargs): return _common_call("bind_input_session", *args, **kwargs)
+def end_input_session(*args, **kwargs): return _common_call("end_input_session", *args, **kwargs)
 _ENTRY_PERFORM_CLICK = perform_click
 def perform_dismiss_click(*args, **kwargs):
     if globals().get("perform_click") is not _ENTRY_PERFORM_CLICK:
         x, y, backend, bounds = args[:4]
-        selected = perform_click(x, y, backend, bounds, False)
-        time.sleep(DISMISS_POST_WAIT_SECONDS)
-        return selected
+        return perform_click(x, y, backend, bounds, False)
     return _common_call("perform_dismiss_click", *args, **kwargs)
+def perform_drag(*args, **kwargs): return _common_call("perform_drag", *args, **kwargs)
 def ensure_game_ready_after_ad(*args, **kwargs): return _common_call("ensure_game_ready_after_ad", *args, **kwargs)
 def click_system_events(*args, **kwargs): return _common_call("click_system_events", *args, **kwargs)
 def click_cgclick_bin(*args, **kwargs): return _common_call("click_cgclick_bin", *args, **kwargs)
@@ -206,7 +209,7 @@ def action_names() -> Iterable[str]:
 
 def print_json(data: object, as_json: bool) -> None:
     if as_json:
-        print(json.dumps(data, ensure_ascii=False, sort_keys=True))
+        builtins.print(json.dumps(data, ensure_ascii=False, sort_keys=True))
     else:
         print(data)
 
@@ -290,6 +293,7 @@ def command_fit_window(args: argparse.Namespace) -> int:
 
 
 def resolve_action(name: str) -> Action:
+    session_started = False
     try:
         return ACTIONS[name]
     except KeyError as exc:
@@ -410,16 +414,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     patrol_full_parser.add_argument("--quick-times", type=int, default=3)
     patrol_full_parser.add_argument("--ad-times", type=int, default=5)
-    patrol_full_parser.add_argument("--panel-wait", type=non_negative_float, default=0.5)
-    patrol_full_parser.add_argument("--claim-wait", type=non_negative_float, default=0.5)
-    patrol_full_parser.add_argument("--dismiss-wait", type=non_negative_float, default=1.0)
-    patrol_full_parser.add_argument("--quick-reward-wait", type=non_negative_float, default=0.5)
-    patrol_full_parser.add_argument("--quick-between", type=non_negative_float, default=0.5)
+    patrol_full_parser.add_argument("--panel-wait", type=non_negative_float, default=0.3)
+    patrol_full_parser.add_argument("--claim-wait", type=non_negative_float, default=0.3)
+    patrol_full_parser.add_argument("--dismiss-wait", type=non_negative_float, default=0.3)
+    patrol_full_parser.add_argument("--quick-reward-wait", type=non_negative_float, default=0.3)
+    patrol_full_parser.add_argument("--quick-between", type=non_negative_float, default=0.3)
     patrol_full_parser.add_argument("--ad-wait", type=non_negative_float, default=33.0)
     patrol_full_parser.add_argument("--ad-close-wait", type=non_negative_float, default=0.5)
     patrol_full_parser.add_argument("--ad-reward-wait", type=non_negative_float, default=1.0)
     patrol_full_parser.add_argument("--ad-between", type=non_negative_float, default=0.5)
-    patrol_full_parser.add_argument("--close-wait", type=non_negative_float, default=0.5)
+    patrol_full_parser.add_argument("--close-wait", type=non_negative_float, default=0.3)
     patrol_full_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
     patrol_full_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_full_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -430,7 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="open patrol from home and run patrol watch-ad cycles without screenshots",
     )
     patrol_ads_home_parser.add_argument("--times", type=int, default=5)
-    patrol_ads_home_parser.add_argument("--panel-wait", type=non_negative_float, default=1.0)
+    patrol_ads_home_parser.add_argument("--panel-wait", type=non_negative_float, default=0.3)
     patrol_ads_home_parser.add_argument("--ad-wait", type=non_negative_float, default=33.0)
     patrol_ads_home_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
     patrol_ads_home_parser.add_argument("--between", type=non_negative_float, default=0.8)
@@ -443,7 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="blindly run normal quick-patrol cycles without screenshots; use only after the count is verified",
     )
     patrol_quick_parser.add_argument("--times", type=int, required=True)
-    patrol_quick_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
+    patrol_quick_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     patrol_quick_parser.add_argument("--between", type=non_negative_float, default=0.8)
     patrol_quick_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_quick_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
@@ -453,9 +457,9 @@ def build_parser() -> argparse.ArgumentParser:
         "mail-claim",
         help="open top-right menu, enter mail/notice, click one-click claim, dismiss reward, and close without screenshots",
     )
-    mail_parser.add_argument("--menu-wait", type=non_negative_float, default=1.0)
-    mail_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    mail_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
+    mail_parser.add_argument("--menu-wait", type=non_negative_float, default=0.3)
+    mail_parser.add_argument("--open-wait", type=non_negative_float, default=0.3)
+    mail_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     mail_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     mail_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     mail_parser.set_defaults(func=command_mail_claim)
@@ -464,8 +468,8 @@ def build_parser() -> argparse.ArgumentParser:
         "calendar-claim",
         help="open calendar, claim its visible free gift, dismiss the reward, and close",
     )
-    calendar_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    calendar_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
+    calendar_parser.add_argument("--open-wait", type=non_negative_float, default=0.3)
+    calendar_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     calendar_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     calendar_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     calendar_parser.set_defaults(func=command_calendar_claim)
@@ -474,8 +478,8 @@ def build_parser() -> argparse.ArgumentParser:
         "welfare-claim",
         help="open welfare, dismiss only its automatic free reward, and return without recharge tabs",
     )
-    welfare_parser.add_argument("--open-wait", type=non_negative_float, default=1.0)
-    welfare_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
+    welfare_parser.add_argument("--open-wait", type=non_negative_float, default=0.3)
+    welfare_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     welfare_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     welfare_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     welfare_parser.set_defaults(func=command_welfare_claim)
@@ -536,11 +540,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the verified daily-cut, two foreign sweeps, and legion reward claim sequence",
     )
     legion_daily_parser.add_argument("--sweep-times", type=int, default=2)
-    legion_daily_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_daily_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=0.5)
-    legion_daily_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
-    legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.5)
-    legion_daily_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
+    legion_daily_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.3)
+    legion_daily_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=0.3)
+    legion_daily_parser.add_argument("--sweep-between", type=non_negative_float, default=0.3)
+    legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.3)
+    legion_daily_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     legion_daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_daily_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_daily_parser.set_defaults(func=command_legion_daily_rewards)
@@ -550,11 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run foreign-challenge sweeps and claim the first legion and personal reward entries",
     )
     legion_reward_parser.add_argument("--sweep-times", type=int, default=2)
-    legion_reward_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_reward_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=0.5)
-    legion_reward_parser.add_argument("--sweep-between", type=non_negative_float, default=0.6)
-    legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.5)
-    legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=1.0)
+    legion_reward_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.3)
+    legion_reward_parser.add_argument("--sweep-reward-wait", type=non_negative_float, default=0.3)
+    legion_reward_parser.add_argument("--sweep-between", type=non_negative_float, default=0.3)
+    legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.3)
+    legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_reward_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_reward_parser.set_defaults(func=command_legion_reward_claims)
@@ -564,9 +568,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="run verified foreign-challenge sweep cycles without screenshots between cycles",
     )
     legion_sweep_parser.add_argument("--times", type=int, required=True)
-    legion_sweep_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.8)
-    legion_sweep_parser.add_argument("--reward-wait", type=non_negative_float, default=0.5)
-    legion_sweep_parser.add_argument("--between", type=non_negative_float, default=0.6)
+    legion_sweep_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.3)
+    legion_sweep_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
+    legion_sweep_parser.add_argument("--between", type=non_negative_float, default=0.3)
     legion_sweep_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_sweep_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_sweep_parser.set_defaults(func=command_legion_sweep_batch)
@@ -597,6 +601,7 @@ def command_requires_focus(args: argparse.Namespace | str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    session_started = False
     try:
         if (
             getattr(args, "mock_bounds", None)
@@ -605,11 +610,16 @@ def main(argv: list[str] | None = None) -> int:
         ):
             raise ClickError("--mock-bounds is simulation-only; add --dry-run instead of executing clicks")
         if command_requires_focus(args):
+            start_input_session()
+            session_started = True
             focus_game_window_at_start()
         return args.func(args)
     except ClickError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    finally:
+        if session_started:
+            end_input_session()
 
 
 if __name__ == "__main__":

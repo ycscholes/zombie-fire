@@ -78,7 +78,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             point("battle_sweep_last"), point("reward_dismiss"), point("battle_sweep_last"), point("reward_dismiss"),
             point("battle_modal_close"), point("training_hall_back"),
             point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
-            point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("reward_dismiss"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
+            point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("reward_dismiss"), point("core_sweep_close"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
         ])
         log = output.getvalue()
         play_shop.assert_called_once()
@@ -89,7 +89,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             "battle_challenge", "battle_castle",
             "battle_modal_challenge", "battle_modal_scroll_to_bottom", "battle_sweep_last", "reward_dismiss", "battle_modal_close",
             "training_hall_back", "element_challenge", "core_trial", "idle_button", "idle_claim",
-            "idle_cancel", "core_sweep", "core_sweep_ten", "core_trial_back", "element_back",
+            "idle_cancel", "core_sweep", "core_sweep_ten", "core_sweep_close", "core_trial_back", "element_back",
         ):
             self.assertIn(f"base training hall: {action}", log)
 
@@ -568,7 +568,91 @@ class FocusEligibilityTests(unittest.TestCase):
 
         dispatch.assert_called_once_with("cgclick", 10, 20)
 
-    def test_perform_dismiss_click_waits_half_second_after_dismissal(self) -> None:
+    def test_perform_click_logs_successful_delivery(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with (
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
+            patch.object(zombie_click, "wait_after_click"),
+            redirect_stdout(output),
+        ):
+            zombie_click.perform_click(10, 20, "cgclick", bounds)
+
+        self.assertIn(
+            "operation: click status=success backend=cgclick point=(10,20)",
+            output.getvalue(),
+        )
+        self.assertRegex(output.getvalue(), r"^\d{2}:\d{2} operation: click status=success")
+
+    def test_json_output_remains_unprefixed_for_machine_parsing(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            zombie_click.print_json({"ready": True}, True)
+
+        self.assertEqual(output.getvalue(), '{"ready": true}\n')
+
+    def test_each_line_of_console_output_gets_an_hh_mm_prefix(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            zombie_click.print("first line\nsecond line")
+
+        self.assertRegex(
+            output.getvalue(),
+            r"^\d{2}:\d{2} first line\n\d{2}:\d{2} second line\n$",
+        )
+
+    def test_perform_click_logs_each_failed_delivery_attempt(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with (
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "try_click_backend", return_value=(False, "unavailable")),
+            redirect_stdout(output),
+        ):
+            with self.assertRaisesRegex(zombie_click.ClickDeliveryError, "cgclick: unavailable"):
+                zombie_click.perform_click(10, 20, "cgclick", bounds)
+
+        self.assertEqual(output.getvalue().count("operation: click status=failed backend=cgclick point=(10,20)"), 2)
+        self.assertEqual(output.getvalue().count("reason=unavailable"), 2)
+
+    def test_perform_drag_logs_successful_delivery(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with (
+            patch.object(zombie_click, "focus_game_window") as focus,
+            patch.object(zombie_click, "ensure_unchanged_game_window") as verify,
+            patch.object(zombie_click, "drag_cgclick_bin", return_value=True) as drag,
+            redirect_stdout(output),
+        ):
+            zombie_click.perform_drag(10, 20, 30, 40, bounds)
+
+        focus.assert_called_once_with(bounds)
+        verify.assert_called_once_with(bounds)
+        drag.assert_called_once_with(10, 20, 30, 40)
+        self.assertIn(
+            "operation: drag status=success backend=cgclick start=(10,20) end=(30,40)",
+            output.getvalue(),
+        )
+
+    def test_perform_drag_logs_unavailable_delivery_before_raising(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with (
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "drag_cgclick_bin", return_value=False),
+            redirect_stdout(output),
+        ):
+            with self.assertRaisesRegex(zombie_click.ClickDeliveryError, "drag backend unavailable"):
+                zombie_click.perform_drag(10, 20, 30, 40, bounds)
+
+        self.assertIn("operation: drag status=failed backend=cgclick start=(10,20) end=(30,40)", output.getvalue())
+        self.assertIn("reason=unavailable", output.getvalue())
+
+    def test_perform_dismiss_click_has_no_fixed_post_dismiss_wait(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         with (
             patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
@@ -577,7 +661,7 @@ class FocusEligibilityTests(unittest.TestCase):
             self.assertEqual(zombie_click.perform_dismiss_click(10, 20, "cgclick", bounds), "cgclick")
 
         click.assert_called_once_with(10, 20, "cgclick", bounds, False)
-        sleep.assert_called_once_with(0.5)
+        sleep.assert_not_called()
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
@@ -596,18 +680,18 @@ class FocusEligibilityTests(unittest.TestCase):
         expected = {
             "patrol-ads-batch": {"ad_wait": 33.0, "reward_wait": 0.5},
             "patrol-full-from-home": {
-                "panel_wait": 0.5, "claim_wait": 0.5, "quick_reward_wait": 0.5,
-                "quick_between": 0.5, "ad_wait": 33.0, "ad_close_wait": 0.5,
-                "ad_between": 0.5, "close_wait": 0.5,
+                "panel_wait": 0.3, "claim_wait": 0.3, "dismiss_wait": 0.3,
+                "quick_reward_wait": 0.3, "quick_between": 0.3, "ad_wait": 33.0,
+                "ad_close_wait": 0.5, "ad_between": 0.5, "close_wait": 0.3,
             },
-            "patrol-ads-from-home": {"ad_wait": 33.0, "reward_wait": 0.5},
-            "patrol-quick-batch": {"reward_wait": 0.5},
-            "mail-claim": {"reward_wait": 0.5},
-            "calendar-claim": {"reward_wait": 0.5},
-            "welfare-claim": {"reward_wait": 0.5},
-            "legion-daily-rewards": {"sweep_reward_wait": 0.5, "reward_page_wait": 0.5},
-            "legion-reward-claims": {"sweep_reward_wait": 0.5, "reward_page_wait": 0.5},
-            "legion-sweep-batch": {"reward_wait": 0.5},
+            "patrol-ads-from-home": {"panel_wait": 0.3, "ad_wait": 33.0, "reward_wait": 0.5},
+            "patrol-quick-batch": {"reward_wait": 0.3},
+            "mail-claim": {"reward_wait": 0.3},
+            "calendar-claim": {"reward_wait": 0.3},
+            "welfare-claim": {"reward_wait": 0.3},
+            "legion-daily-rewards": {"sweep_reward_wait": 0.3, "reward_page_wait": 0.3},
+            "legion-reward-claims": {"sweep_reward_wait": 0.3, "reward_page_wait": 0.3},
+            "legion-sweep-batch": {"reward_wait": 0.3},
         }
         for command, values in expected.items():
             required_times = {"patrol-quick-batch", "legion-sweep-batch"}
@@ -621,7 +705,7 @@ class FocusEligibilityTests(unittest.TestCase):
             args = parser.parse_args([command])
             self.assertEqual(args.ad_wait, 33.0)
 
-    def test_reward_dismiss_clicks_once_and_waits_half_second(self) -> None:
+    def test_reward_dismiss_clicks_once_without_fixed_post_dismiss_wait(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         points = {"reward_dismiss": (252, 853)}
         with (
@@ -636,7 +720,7 @@ class FocusEligibilityTests(unittest.TestCase):
             )
 
         click.assert_called_once_with(252, 853, "cgclick", bounds, False)
-        sleep.assert_called_once_with(0.5)
+        sleep.assert_not_called()
 
     def test_each_real_click_refocuses_before_verifying_and_dispatching(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -662,6 +746,46 @@ class FocusEligibilityTests(unittest.TestCase):
             zombie_click.perform_click(10, 20, "cgclick", bounds)
 
         self.assertEqual(events, ["focus", "verify", "click"])
+
+    def test_session_reuses_a_verified_window_for_three_safe_clicks_then_audits(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        zombie_click.start_input_session()
+        zombie_click.bind_input_session(bounds)
+        try:
+            with (
+                patch.object(zombie_click, "focus_game_window") as focus,
+                patch.object(zombie_click, "ensure_unchanged_game_window") as verify,
+                patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
+                patch.object(zombie_click, "wait_after_click"),
+            ):
+                for _ in range(3):
+                    zombie_click.perform_click(10, 20, "cgclick", bounds)
+                zombie_click.perform_click(10, 20, "cgclick", bounds)
+        finally:
+            zombie_click.end_input_session()
+
+        focus.assert_not_called()
+        verify.assert_called_once_with(bounds)
+
+    def test_session_click_log_reports_fast_path_timing(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        zombie_click.start_input_session()
+        zombie_click.bind_input_session(bounds)
+        try:
+            with (
+                patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
+                patch.object(zombie_click, "wait_after_click"),
+                redirect_stdout(output),
+            ):
+                zombie_click.perform_click(10, 20, "cgclick", bounds)
+        finally:
+            zombie_click.end_input_session()
+
+        self.assertRegex(
+            output.getvalue(),
+            r"operation: click status=success backend=cgclick point=\(10,20\) mode=session preflight_ms=0(?:\.\d+)? deliver_ms=",
+        )
 
     def test_legion_reward_claims_runs_the_full_foreign_challenge_route(self) -> None:
         args = zombie_click.build_parser().parse_args(["legion-reward-claims"])
@@ -700,7 +824,7 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge_back"], bounds),
             ],
         )
-        self.assertEqual(waits, [0.8, 0.5, 0.6, 0.8, 0.5, 0.5])
+        self.assertEqual(waits, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
 
     def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
         with self.assertRaises(SystemExit):
@@ -994,7 +1118,7 @@ class FocusEligibilityTests(unittest.TestCase):
         point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
         self.assertEqual(clicks, [point("calendar_top"), point("calendar_gift"), point("reward_dismiss"), point("calendar_close")])
 
-    def test_welfare_claim_clicks_only_free_popup_dismiss_and_back(self) -> None:
+    def test_welfare_claim_drags_menu_then_clicks_free_popup_and_back(self) -> None:
         args = zombie_click.build_parser().parse_args(["welfare-claim"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         clicks: list[tuple[int, int]] = []
@@ -1005,14 +1129,21 @@ class FocusEligibilityTests(unittest.TestCase):
                 "perform_click",
                 side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
             ),
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "drag_cgclick_bin") as drag,
             patch.object(zombie_click, "sleep_between"),
         ):
             self.assertEqual(zombie_click.command_welfare_claim(args), 0)
 
         point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        drag.assert_called_once_with(
+            *point("welfare_menu_drag_start"),
+            *point("welfare_menu_drag_end"),
+        )
         self.assertEqual(
             clicks,
-            [point("welfare_cluster"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
+            [point("welfare_entry"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
         )
 
     def test_daily_rewards_runs_all_eight_phases_in_order_with_shared_bounds(self) -> None:

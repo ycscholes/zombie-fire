@@ -60,8 +60,8 @@ Use `dry-run click <action>` to inspect both values before a live click.
 
 Every helper click waits a random `0.4` to `0.6` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
-Reward-popup dismiss clicks use a fixed 0.5-second wait after dismissal before
-the next operation.
+Reward-popup dismiss clicks do not add a fixed post-dismiss wait; any needed
+transition delay must come from the surrounding business wait.
 
 Every click backend uses the same complete tap semantics: move to the target,
 press, hold for 80 ms, then release with click-state `1`. By default, the
@@ -265,7 +265,9 @@ defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
   `作战计划`, claim visible `签到` only when direct-free; stop if already checked.
   Fixed clicks available after a page gate: `pass_entry`, `pass_free_claim`,
   `work_plan_tab`, and `work_plan_sign`.
-- `福利`: `welfare-claim` opens only the known `七日突围` welfare cluster,
+- `福利`: `welfare-claim` first drags the right-side menu upward using the
+  calibrated `welfare_menu_drag_start` -> `welfare_menu_drag_end` path, then
+  clicks the revealed `welfare_entry` to open only the known `七日突围` welfare cluster,
   dismisses its automatic free-reward popup with
   `welfare_reward_popup_dismiss`, and returns with `back_bottom_left`. It
   never clicks within the page. Skip补签, ads, RMB,
