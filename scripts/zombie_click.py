@@ -330,7 +330,8 @@ def command_click(args: argparse.Namespace) -> int:
     action = resolve_action(args.name)
     bounds = prepare_command_bounds(args)
     x, y = scale_point(action, bounds)
-    backend = perform_click(x, y, args.backend, bounds)
+    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_click
+    backend = click(x, y, args.backend, bounds)
     print(f"clicked {args.name} at {x},{y} via {backend}")
     return 0
 
@@ -342,8 +343,9 @@ def command_seq(args: argparse.Namespace) -> int:
     bounds = prepare_command_bounds(args)
     x, y = scale_point(action, bounds)
     backend = ""
+    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_click
     for idx in range(args.times):
-        backend = perform_click(x, y, args.backend, bounds)
+        backend = click(x, y, args.backend, bounds)
         if idx + 1 < args.times:
             sleep_between(args.interval)
     print(f"clicked {args.name} {args.times} times at {x},{y} via {backend}")

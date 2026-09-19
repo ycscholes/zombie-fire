@@ -135,7 +135,19 @@ ACTIONS: Dict[str, Action] = {
     "close_top_right": Action(468, 75, "top-right close button"),
 }
 
-
+REWARD_ACTION_NAMES = frozenset({
+    "patrol_claim", "quick_patrol", "ad_close_top", "ad_close_lower",
+    "calendar_gift", "mail_claim_all", "welfare_entry", "pass_free_claim",
+    "work_plan_sign", "cafeteria_claim", "global_rescue_free",
+    "terminal_crisis_confirm", "battle_sweep_last", "idle_claim",
+    "core_sweep_ten", "play_shop_buy", "journey_gold_claim",
+    "journey_wood_claim", "legion_cut_once", "legion_sweep_confirm",
+    "legion_reward_claim_top", "legion_reward_claim_row1",
+    "legion_reward_claim_row2", "legion_reward_claim_row3",
+    "legion_reward_claim_row4", "legion_reward_claim_row5",
+    "legion_reward_claim_row6", "legion_personal_reward_claim_top",
+    "legion_shop_buy", "shop_resource_gold600_free", "shop_gold_free",
+})
 
 
 def action_names() -> Iterable[str]:

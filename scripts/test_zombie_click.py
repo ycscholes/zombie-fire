@@ -709,6 +709,27 @@ class FocusEligibilityTests(unittest.TestCase):
 
         sleep.assert_called_once_with(zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
         self.assertIn("post_reward_wait_ms=1050.0", output.getvalue())
+        self.assertIn("post_reward_wait_actual_ms=", output.getvalue())
+
+    def test_generic_reward_actions_use_the_project_reward_interval(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        click_args = zombie_click.build_parser().parse_args(["click", "patrol_claim"])
+        seq_args = zombie_click.build_parser().parse_args(["seq", "patrol_claim", "--times", "2", "--interval", "0"])
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_reward_click", return_value="cgclick") as reward_click,
+            patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
+            patch.object(zombie_click, "sleep_between"),
+        ):
+            self.assertEqual(zombie_click.command_click(click_args), 0)
+            self.assertEqual(zombie_click.command_seq(seq_args), 0)
+
+        self.assertEqual(reward_click.call_count, 3)
+        click.assert_not_called()
+        self.assertTrue(
+            {"patrol_claim", "quick_patrol", "ad_close_top", "journey_gold_claim", "shop_gold_free"}
+            <= zombie_click.REWARD_ACTION_NAMES
+        )
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:

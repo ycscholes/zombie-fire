@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Tuple
 
-from .zombie_actions import ACTIONS, Action
+from .zombie_actions import ACTIONS, REWARD_ACTION_NAMES, Action
 
 import subprocess
 import sys
@@ -727,7 +727,14 @@ def perform_click(
                     f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}{reward_wait_detail}",
                 )
                 if post_reward_wait_seconds is not None:
+                    reward_wait_started_at = time.monotonic()
                     time.sleep(post_reward_wait_seconds)
+                    log_operation(
+                        "reward-wait",
+                        "success",
+                        f"minimum_ms={post_reward_wait_seconds * 1000:.1f} "
+                        f"post_reward_wait_actual_ms={(time.monotonic() - reward_wait_started_at) * 1000:.1f}",
+                    )
                 elif wait_after:
                     wait_after_click()
                 return candidate
@@ -829,7 +836,7 @@ def run_repeated_click_flow(
                 perform_dismiss_click
                 if "dismiss" in action_name
                 else perform_reward_click
-                if action_name in reward_actions
+                if action_name in REWARD_ACTION_NAMES or action_name in reward_actions
                 else perform_click
             )
             backend = click(*points[action_name], backend_name, bounds)
