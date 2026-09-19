@@ -58,7 +58,7 @@ is represented as `Action(358,513)` and delivered to CoreGraphics at
 `scale_point()` adds the window origin when producing the final screen point.
 Use `dry-run click <action>` to inspect both values before a live click.
 
-Every helper click waits a random `0.4` to `0.6` seconds before the next helper
+Every helper click waits a random `0.8` to `1.0` seconds before the next helper
 operation. Do not bypass this pacing when adding new scripted click flows.
 Reward-popup dismiss clicks do not add a fixed post-dismiss wait; any needed
 transition delay must come from the surrounding business wait.
