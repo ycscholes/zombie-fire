@@ -1,6 +1,7 @@
 import io
 import argparse
 import importlib.util
+import os
 import pathlib
 import subprocess
 import sys
@@ -584,7 +585,7 @@ class FocusEligibilityTests(unittest.TestCase):
             "operation: click status=success backend=cgclick point=(10,20)",
             output.getvalue(),
         )
-        self.assertRegex(output.getvalue(), r"^\d{2}:\d{2} operation: click status=success")
+        self.assertRegex(output.getvalue(), r"^\d{2}:\d{2}:\d{2} operation: click status=success")
 
     def test_json_output_remains_unprefixed_for_machine_parsing(self) -> None:
         output = io.StringIO()
@@ -593,14 +594,14 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertEqual(output.getvalue(), '{"ready": true}\n')
 
-    def test_each_line_of_console_output_gets_an_hh_mm_prefix(self) -> None:
+    def test_each_line_of_console_output_gets_an_hh_mm_ss_prefix(self) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
             zombie_click.print("first line\nsecond line")
 
         self.assertRegex(
             output.getvalue(),
-            r"^\d{2}:\d{2} first line\n\d{2}:\d{2} second line\n$",
+            r"^\d{2}:\d{2}:\d{2} first line\n\d{2}:\d{2}:\d{2} second line\n$",
         )
 
     def test_perform_click_logs_each_failed_delivery_attempt(self) -> None:
@@ -784,8 +785,39 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertRegex(
             output.getvalue(),
-            r"operation: click status=success backend=cgclick point=\(10,20\) mode=session preflight_ms=0(?:\.\d+)? deliver_ms=",
+            r"operation: click status=success backend=cgclick point=\(10,20\) mode=session .*preflight_ms=0(?:\.\d+)? deliver_ms=",
         )
+
+    def test_input_session_logs_lifecycle_and_preflight_identity(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            zombie_click.start_input_session()
+            zombie_click.bind_input_session(bounds)
+            try:
+                with (
+                    patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
+                    patch.object(zombie_click, "wait_after_click"),
+                ):
+                    zombie_click.perform_click(10, 20, "cgclick", bounds)
+            finally:
+                zombie_click.end_input_session()
+
+        log = output.getvalue()
+        session_id = str(os.getpid())
+        self.assertIn(f"input-session: start id={session_id}", log)
+        self.assertIn(
+            f"input-session: bind id={session_id} bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)",
+            log,
+        )
+        self.assertIn(
+            f"mode=session session_id={session_id} session_state=match",
+            log,
+        )
+        self.assertIn("expected_bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)", log)
+        self.assertIn("bound_bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)", log)
+        self.assertRegex(log, r"session_age_ms=\d+\.\d")
+        self.assertIn(f"input-session: end id={session_id}", log)
 
     def test_legion_reward_claims_runs_the_full_foreign_challenge_route(self) -> None:
         args = zombie_click.build_parser().parse_args(["legion-reward-claims"])
@@ -1158,6 +1190,7 @@ class FocusEligibilityTests(unittest.TestCase):
         with (
             patch.object(zombie_click, "front_window_snapshot", return_value=self.game_snapshot("向僵尸开炮")),
             patch.object(zombie_click, "fit_game_window", return_value=bounds),
+            patch.object(zombie_click._daily, "bind_input_session") as bind_session,
             patch.object(
                 zombie_click,
                 "command_patrol_full_from_home",
@@ -1205,6 +1238,7 @@ class FocusEligibilityTests(unittest.TestCase):
             phases,
             [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds), ("base", bounds), ("shop", bounds)],
         )
+        bind_session.assert_called_once_with(bounds)
 
     def test_daily_rewards_from_step_three_skips_patrol_and_calendar(self) -> None:
         args = zombie_click.build_parser().parse_args(

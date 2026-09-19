@@ -134,12 +134,12 @@ int main(int argc, char **argv) {
 
 
 def print(*values, sep: str = " ", end: str = "\n", file=None, flush: bool = False) -> None:
-    """Print console output with a local HH:MM prefix on every non-empty line."""
+    """Print console output with a local HH:MM:SS prefix on every non-empty line."""
     target = sys.stdout if file is None else file
     message = sep.join(str(value) for value in values)
     lines = message.splitlines() or [""]
     timestamped = "\n".join(
-        f"{datetime.now():%H:%M} {line}" if line else ""
+        f"{datetime.now():%H:%M:%S} {line}" if line else ""
         for line in lines
     )
     builtins.print(timestamped, end=end, file=target, flush=flush)
@@ -183,6 +183,7 @@ class PhaseRecoveryError(WindowStateError):
 class InputSession:
     """Per-command window proof that permits a short run of safe inputs."""
 
+    id: str
     bounds: Bounds | None = None
     operations_since_audit: int = 0
     last_audit_at: float = 0.0
@@ -194,7 +195,17 @@ _input_session: InputSession | None = None
 def start_input_session() -> None:
     """Enable short-lived verification reuse for one CLI command."""
     global _input_session
-    _input_session = InputSession()
+    _input_session = InputSession(id=str(os.getpid()))
+    print(f"input-session: start id={_input_session.id}", flush=True)
+
+
+def format_bounds(bounds: Bounds | None) -> str:
+    if bounds is None:
+        return "none"
+    return (
+        f"({bounds.app_name},{bounds.bundle_id},{bounds.x},{bounds.y},"
+        f"{bounds.width},{bounds.height})"
+    )
 
 
 def bind_input_session(bounds: Bounds) -> None:
@@ -204,11 +215,17 @@ def bind_input_session(bounds: Bounds) -> None:
     _input_session.bounds = bounds
     _input_session.operations_since_audit = 0
     _input_session.last_audit_at = time.monotonic()
+    print(
+        f"input-session: bind id={_input_session.id} bounds={format_bounds(bounds)}",
+        flush=True,
+    )
 
 
 def end_input_session() -> None:
     """Discard command-local window proof so it cannot leak to a later run."""
     global _input_session
+    if _input_session is not None:
+        print(f"input-session: end id={_input_session.id}", flush=True)
     _input_session = None
 
 
@@ -621,10 +638,31 @@ def log_operation(kind: str, status: str, details: str) -> None:
     print(f"operation: {kind} status={status} {details}", flush=True)
 
 
-def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float]:
+def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
     """Use a bounded session audit when safe, otherwise run the full guard."""
     started_at = time.monotonic()
     session = _input_session
+    if session is None:
+        session_id = "none"
+        session_state = "missing"
+        session_age_ms = -1.0
+        bound_bounds = None
+    else:
+        session_id = session.id
+        bound_bounds = session.bounds
+        session_age_ms = max(0.0, (started_at - session.last_audit_at) * 1000)
+        if session.bounds is None:
+            session_state = "unbound"
+        elif session.bounds == expected_bounds:
+            session_state = "match"
+        else:
+            session_state = "bounds_mismatch"
+    diagnostic = (
+        f"session_id={session_id} session_state={session_state} "
+        f"session_age_ms={session_age_ms:.1f} "
+        f"expected_bounds={format_bounds(expected_bounds)} "
+        f"bound_bounds={format_bounds(bound_bounds)}"
+    )
     if (
         not retry
         and session is not None
@@ -633,7 +671,7 @@ def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[st
         and started_at - session.last_audit_at < SESSION_AUDIT_MAX_AGE_SECONDS
     ):
         session.operations_since_audit += 1
-        return "session", (time.monotonic() - started_at) * 1000
+        return "session", (time.monotonic() - started_at) * 1000, diagnostic
 
     mode = "full" if retry or session is None or session.bounds != expected_bounds else "audit"
     try:
@@ -652,7 +690,7 @@ def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[st
     if session is not None and session.bounds == expected_bounds:
         session.operations_since_audit = 1
         session.last_audit_at = time.monotonic()
-    return mode, (time.monotonic() - started_at) * 1000
+    return mode, (time.monotonic() - started_at) * 1000, diagnostic
 
 
 def perform_click(
@@ -666,7 +704,10 @@ def perform_click(
         raise ClickDeliveryError("real clicks require calibrated game-window bounds")
     failures = []
     for attempt_index in range(2):
-        mode, preflight_ms = input_preflight(expected_bounds, retry=attempt_index > 0)
+        mode, preflight_ms, session_diagnostic = input_preflight(
+            expected_bounds,
+            retry=attempt_index > 0,
+        )
         for candidate in click_backend_candidates(backend):
             delivery_started_at = time.monotonic()
             clicked, reason = try_click_backend(candidate, x, y)
@@ -675,7 +716,7 @@ def perform_click(
                 log_operation(
                     "click",
                     "success",
-                    f"backend={candidate} point=({x},{y}) mode={mode} "
+                    f"backend={candidate} point=({x},{y}) mode={mode} {session_diagnostic} "
                     f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}",
                 )
                 if wait_after:
@@ -684,7 +725,7 @@ def perform_click(
             log_operation(
                 "click",
                 "failed",
-                f"backend={candidate} point=({x},{y}) mode={mode} "
+                f"backend={candidate} point=({x},{y}) mode={mode} {session_diagnostic} "
                 f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f} reason={reason}",
             )
             failures.append(f"{candidate}: {reason}")
@@ -711,7 +752,7 @@ def perform_drag(
     """Deliver one calibrated CoreGraphics drag and log its result."""
     if expected_bounds is None:
         raise ClickDeliveryError("real drags require calibrated game-window bounds")
-    mode, preflight_ms = input_preflight(expected_bounds)
+    mode, preflight_ms, session_diagnostic = input_preflight(expected_bounds)
     delivery_started_at = time.monotonic()
     try:
         delivered = drag_cgclick_bin(x1, y1, x2, y2)
@@ -720,7 +761,7 @@ def perform_drag(
         log_operation(
             "drag",
             "failed",
-            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} {session_diagnostic} "
             f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f} reason={reason}",
         )
         raise ClickDeliveryError(f"drag backend failed: {reason}") from exc
@@ -728,14 +769,14 @@ def perform_drag(
         log_operation(
             "drag",
             "failed",
-            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+            f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} {session_diagnostic} "
             f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f} reason=unavailable",
         )
         raise ClickDeliveryError("drag backend unavailable")
     log_operation(
         "drag",
         "success",
-        f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} "
+        f"backend=cgclick start=({x1},{y1}) end=({x2},{y2}) mode={mode} {session_diagnostic} "
         f"preflight_ms={preflight_ms:.1f} deliver_ms={(time.monotonic() - delivery_started_at) * 1000:.1f}",
     )
 

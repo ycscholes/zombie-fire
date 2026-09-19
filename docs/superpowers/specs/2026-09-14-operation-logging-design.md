@@ -10,7 +10,7 @@
 
 ## 方案
 
-Every human-readable console log line begins with the current local time in `HH:MM` form, for example `01:11 base training hall: training_hall_back (clicked) via cgclick`. Prefix each line independently when a message spans multiple lines. Keep machine-readable JSON output free of the prefix.
+Every human-readable console log line begins with the current local time in `HH:MM:SS` form, for example `01:11:22 base training hall: training_hall_back (clicked) via cgclick`. Prefix each line independently when a message spans multiple lines. Keep machine-readable JSON output free of the prefix.
 
 在公共模块添加一个小型 `log_operation` 函数。它向标准输出写入固定格式的 `operation:` 日志，包含操作种类、屏幕坐标、后端与状态；每次成功点击在后端选定后记录一次。点击失败前也记录失败状态和错误原因，然后保持原有异常语义。
 
@@ -23,6 +23,6 @@ Every human-readable console log line begins with the current local time in `HH:
 - 任意 `perform_click` 成功输出一条包含点击坐标、后端和成功状态的 `operation:` 日志。
 - 点击后端不可用时，在抛出异常前输出一条失败日志。
 - 任意 `perform_drag` 成功或失败各输出一条日志，并保持聚焦/窗口校验顺序。
-- 所有任务的可读控制台日志及输入操作日志均以本地 `HH:MM` 时间前缀开头；JSON 输出保持原格式。
+- 所有任务的可读控制台日志及输入操作日志均以本地 `HH:MM:SS` 时间前缀开头；JSON 输出保持原格式。
 - 福利、训练场/商城和军团路径的拖拽全部通过 `perform_drag`。
 - 既有完整单元测试与 dry-run 不引入真实输入。

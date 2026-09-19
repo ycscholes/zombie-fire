@@ -94,6 +94,7 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
             )
         bounds = fit_game_window() if args.fit else ensure_valid_game_bounds(get_bounds(args))
         validate_bounds(bounds, allow_mock=False)
+        bind_input_session(bounds)
 
     phase_values = {
         **vars(args),
