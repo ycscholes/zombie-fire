@@ -37,6 +37,7 @@ ASPECT_MAX = 0.68
 POST_CLICK_WAIT_MIN = 0.3
 POST_CLICK_WAIT_MAX = 0.5
 MIN_WAIT_SECONDS = 0.3
+REWARD_POST_ACTION_MIN_SECONDS = 1.05
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
 WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
@@ -699,6 +700,7 @@ def perform_click(
     backend: str = "auto",
     expected_bounds: Bounds | None = None,
     wait_after: bool = True,
+    post_reward_wait_seconds: float | None = None,
 ) -> str:
     if expected_bounds is None:
         raise ClickDeliveryError("real clicks require calibrated game-window bounds")
@@ -713,13 +715,20 @@ def perform_click(
             clicked, reason = try_click_backend(candidate, x, y)
             delivery_ms = (time.monotonic() - delivery_started_at) * 1000
             if clicked:
+                reward_wait_detail = (
+                    f" post_reward_wait_ms={post_reward_wait_seconds * 1000:.1f}"
+                    if post_reward_wait_seconds is not None
+                    else ""
+                )
                 log_operation(
                     "click",
                     "success",
                     f"backend={candidate} point=({x},{y}) mode={mode} {session_diagnostic} "
-                    f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}",
+                    f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}{reward_wait_detail}",
                 )
-                if wait_after:
+                if post_reward_wait_seconds is not None:
+                    time.sleep(post_reward_wait_seconds)
+                elif wait_after:
                     wait_after_click()
                 return candidate
             log_operation(
@@ -740,6 +749,23 @@ def perform_dismiss_click(
 ) -> str:
     """Dismiss a reward popup without adding a fixed post-dismiss wait."""
     return perform_click(x, y, backend, expected_bounds, False)
+
+
+def perform_reward_click(
+    x: int,
+    y: int,
+    backend: str,
+    expected_bounds: Bounds,
+) -> str:
+    """Claim a reward and wait project-wide before any later physical input."""
+    return perform_click(
+        x,
+        y,
+        backend,
+        expected_bounds,
+        False,
+        REWARD_POST_ACTION_MIN_SECONDS,
+    )
 
 
 def perform_drag(

@@ -53,7 +53,7 @@ _COMMON_BASE = {
     )
 }
 _TASK_DEPENDENCIES = (
-    "prepare_command_bounds", "perform_click", "perform_dismiss_click", "sleep_between",
+        "prepare_command_bounds", "perform_click", "perform_dismiss_click", "perform_reward_click", "sleep_between",
     "scale_point", "ensure_game_ready_after_ad", "focus_game_window", "perform_drag", "drag_cgclick_bin",
     "ACTIONS", "Bounds", "set_phase_state", "PhaseProgress", "PhaseResult",
     "recover_phase",
@@ -154,7 +154,7 @@ def _common_call(name, *args, **kwargs):
         "run_osascript", "time", "shutil", "subprocess", "click_cgclick_bin", "click_quartz", "click_cliclick",
         "click_system_events", "try_click_backend", "drag_cgclick_bin", "front_window_snapshot", "classify_snapshot",
         "get_bounds", "prepare_command_bounds", "fit_game_window", "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "ensure_unchanged_game_window", "wait_after_click", "sleep_between",
+        "perform_click", "ensure_unchanged_game_window", "wait_after_click", "sleep_between",
     ):
         value = globals().get(dependency)
         if dependency != name and value is not None and type(value).__module__.startswith("unittest.mock"):
@@ -171,6 +171,7 @@ def _common_call(name, *args, **kwargs):
 def focus_game_window(*args, **kwargs): return _common_call("focus_game_window", *args, **kwargs)
 def focus_game_window_at_start(*args, **kwargs): return _common_call("focus_game_window_at_start", *args, **kwargs)
 def perform_click(*args, **kwargs): return _common_call("perform_click", *args, **kwargs)
+def perform_reward_click(*args, **kwargs): return _common_call("perform_reward_click", *args, **kwargs)
 def start_input_session(*args, **kwargs): return _common_call("start_input_session", *args, **kwargs)
 def bind_input_session(*args, **kwargs): return _common_call("bind_input_session", *args, **kwargs)
 def end_input_session(*args, **kwargs): return _common_call("end_input_session", *args, **kwargs)
