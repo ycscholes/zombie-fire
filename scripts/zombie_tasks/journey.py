@@ -21,11 +21,11 @@ def command_journey_resource_claim(args: argparse.Namespace) -> int:
 
     backend = perform_click(*points["journey_tab"], args.backend, bounds)
     print(f"journey resource claim: opened journey tab via {backend}", flush=True)
-    backend = perform_click(*points["journey_gold_claim"], args.backend, bounds)
+    backend = perform_reward_click(*points["journey_gold_claim"], args.backend, bounds)
     print(f"journey resource claim: collected gold resource via {backend}", flush=True)
     backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"journey resource claim: dismissed gold reward popup via {backend}", flush=True)
-    backend = perform_click(*points["journey_wood_claim"], args.backend, bounds)
+    backend = perform_reward_click(*points["journey_wood_claim"], args.backend, bounds)
     print(f"journey resource claim: collected wood resource via {backend}", flush=True)
     backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"journey resource claim: dismissed wood reward popup via {backend}")

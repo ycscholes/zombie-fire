@@ -17,7 +17,7 @@ def _purchase_legion_shop_item(args: argparse.Namespace, points: dict[str, tuple
     backend = perform_click(*points[item_action], args.backend, bounds)
     print(f"legion shop purchases: opened {item_action} via {backend}", flush=True)
     perform_click(*points["legion_shop_max"], args.backend, bounds)
-    perform_click(*points["legion_shop_buy"], args.backend, bounds)
+    perform_reward_click(*points["legion_shop_buy"], args.backend, bounds)
     perform_dismiss_click(*points["legion_shop_reward_dismiss"], args.backend, bounds)
     perform_click(*points["legion_shop_modal_close"], args.backend, bounds)
     print(f"legion shop purchases: completed {item_action}", flush=True)
@@ -90,7 +90,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     backend = perform_click(*points["legion_daily_cut"], args.backend, bounds)
     set_phase_state(args, "legion_daily_cut_opened")
     print(f"legion daily rewards: opened daily cut via {backend}", flush=True)
-    backend = perform_click(*points["legion_cut_once"], args.backend, bounds)
+    backend = perform_reward_click(*points["legion_cut_once"], args.backend, bounds)
     print(f"legion daily rewards: clicked daily cut once via {backend}", flush=True)
     backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"legion daily rewards: dismissed daily-cut reward info via {backend}", flush=True)
@@ -165,6 +165,7 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         backend_name=args.backend,
         count=args.sweep_times,
         between=args.sweep_between,
+        reward_actions=frozenset({"confirm"}),
         steps=(
             ("sweep", "legion reward claims sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
             ("confirm", "legion reward claims sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
@@ -181,7 +182,13 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         ("legion_reward_panel_close", "closed rewards panel", 0),
         ("legion_foreign_challenge_back", "returned to legion", 0),
     ):
-        click = perform_dismiss_click if action == "reward_dismiss" else perform_click
+        click = (
+            perform_dismiss_click
+            if action == "reward_dismiss"
+            else perform_reward_click
+            if action in {"legion_reward_claim_top", "legion_personal_reward_claim_top"}
+            else perform_click
+        )
         backend = click(*points[action], args.backend, bounds)
         if action == "legion_reward_left":
             set_phase_state(args, "legion_rewards_opened")
@@ -219,6 +226,7 @@ def command_legion_sweep_batch(args: argparse.Namespace) -> int:
         backend_name=args.backend,
         count=args.times,
         between=args.between,
+        reward_actions=frozenset({"confirm"}),
         steps=(
             ("sweep", "legion sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
             ("confirm", "legion sweep {index}/{count}: clicked confirm via {backend}", args.reward_wait),

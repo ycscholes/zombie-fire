@@ -120,14 +120,14 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
     print(f"patrol full: clicked patrol truck via {backend}", flush=True)
     sleep_between(args.panel_wait)
 
-    backend = perform_click(*points["patrol_claim"], args.backend, bounds)
+    backend = perform_reward_click(*points["patrol_claim"], args.backend, bounds)
     print(f"patrol full: clicked patrol claim via {backend}", flush=True)
     sleep_between(args.claim_wait)
     backend = dismiss_reward_once(points, args.backend, bounds, label="patrol full claim")
     sleep_between(args.quick_between)
 
     for idx in range(args.quick_times):
-        backend = perform_click(*points["quick_patrol"], args.backend, bounds)
+        backend = perform_reward_click(*points["quick_patrol"], args.backend, bounds)
         print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
         sleep_between(args.quick_reward_wait)
         backend = dismiss_reward_once(

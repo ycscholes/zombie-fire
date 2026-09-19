@@ -13,8 +13,9 @@ def _click_action(
     bounds: Bounds,
     *,
     dismiss: bool = False,
+    reward: bool = False,
 ) -> str:
-    click = perform_dismiss_click if dismiss else perform_click
+    click = perform_dismiss_click if dismiss else perform_reward_click if reward else perform_click
     backend = click(*points[action], args.backend, bounds)
     verb = "dismissed" if dismiss else "clicked"
     print(f"base training hall: {action} ({verb}) via {backend}", flush=True)
@@ -45,7 +46,7 @@ def _purchase_play_shop_item(
     backend = perform_click(*points[item_action], args.backend, bounds)
     print(f"base training hall shop: opened {item_action} via {backend}", flush=True)
     perform_click(*points["play_shop_max"], args.backend, bounds)
-    perform_click(*points["play_shop_buy"], args.backend, bounds)
+    perform_reward_click(*points["play_shop_buy"], args.backend, bounds)
     perform_dismiss_click(*points["play_shop_reward_dismiss"], args.backend, bounds)
     perform_click(*points["play_shop_modal_close"], args.backend, bounds)
     print(f"base training hall shop: completed {item_action}", flush=True)
@@ -105,12 +106,12 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
 
     _click_action(args, points, "base_tab", bounds)
     _click_action(args, points, "cafeteria", bounds)
-    _click_action(args, points, "cafeteria_claim", bounds)
+    _click_action(args, points, "cafeteria_claim", bounds, reward=True)
     _click_action(args, points, "training_reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "cafeteria_back", bounds)
     _click_action(args, points, "training_hall", bounds)
     _click_action(args, points, "global_rescue_challenge", bounds)
-    _click_action(args, points, "global_rescue_free", bounds)
+    _click_action(args, points, "global_rescue_free", bounds, reward=True)
     _click_action(args, points, "training_reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "training_hall_back", bounds)
     scroll_to_bottom(args)
@@ -118,7 +119,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         print("base training hall: scroll_to_bottom (scrolled) via cgclick", flush=True)
     _click_action(args, points, "terminal_crisis_challenge", bounds)
     _click_action(args, points, "terminal_crisis_sweep", bounds)
-    _click_action(args, points, "terminal_crisis_confirm", bounds)
+    _click_action(args, points, "terminal_crisis_confirm", bounds, reward=True)
     _click_action(args, points, "training_reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "training_hall_back", bounds)
     _click_action(args, points, "battle_challenge", bounds)
@@ -129,7 +130,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     if not args.skip_scroll:
         print("base training hall: battle_modal_scroll_to_bottom (scrolled) via cgclick", flush=True)
     for index in range(args.battle_times):
-        _click_action(args, points, "battle_sweep_last", bounds)
+        _click_action(args, points, "battle_sweep_last", bounds, reward=True)
         _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
         print(f"base training hall: battlefield sweep {index + 1}/{args.battle_times} complete", flush=True)
     _click_action(args, points, "battle_modal_close", bounds)
@@ -137,11 +138,11 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     _click_action(args, points, "element_challenge", bounds)
     _click_action(args, points, "core_trial", bounds)
     _click_action(args, points, "idle_button", bounds)
-    _click_action(args, points, "idle_claim", bounds)
+    _click_action(args, points, "idle_claim", bounds, reward=True)
     _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "idle_cancel", bounds)
     _click_action(args, points, "core_sweep", bounds)
-    _click_action(args, points, "core_sweep_ten", bounds)
+    _click_action(args, points, "core_sweep_ten", bounds, reward=True)
     _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
     _click_action(args, points, "core_sweep_close", bounds)
     _click_action(args, points, "core_trial_back", bounds)

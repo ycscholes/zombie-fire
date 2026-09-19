@@ -818,13 +818,20 @@ def run_repeated_click_flow(
     backend_name: str,
     count: int,
     between: float,
+    reward_actions: frozenset[str] = frozenset(),
     steps: tuple[tuple[str, str, float], ...],
 ) -> str:
     """Run a repeated action flow and return the backend used by its last click."""
     backend = ""
     for index in range(count):
         for action_name, message, wait in steps:
-            click = perform_dismiss_click if "dismiss" in action_name else perform_click
+            click = (
+                perform_dismiss_click
+                if "dismiss" in action_name
+                else perform_reward_click
+                if action_name in reward_actions
+                else perform_click
+            )
             backend = click(*points[action_name], backend_name, bounds)
             print(
                 message.format(index=index + 1, count=count, backend=backend),

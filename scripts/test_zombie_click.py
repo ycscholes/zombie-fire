@@ -434,6 +434,26 @@ class FocusEligibilityTests(unittest.TestCase):
             ],
         )
 
+    def test_journey_claims_use_project_reward_interval(self) -> None:
+        args = zombie_click.build_parser().parse_args(["journey-resource-claim"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_click", return_value="cgclick"),
+            patch.object(zombie_click, "perform_reward_click", return_value="cgclick") as reward_click,
+            patch.object(zombie_click, "perform_dismiss_click", return_value="cgclick"),
+        ):
+            self.assertEqual(zombie_click.command_journey_resource_claim(args), 0)
+
+        point = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            reward_click.call_args_list,
+            [
+                (( *point("journey_gold_claim"), args.backend, bounds), {}),
+                (( *point("journey_wood_claim"), args.backend, bounds), {}),
+            ],
+        )
+
     def test_journey_resource_targets_remain_at_the_visible_bubble_centers(self) -> None:
         self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 368)
         self.assertEqual(zombie_click.ACTIONS["journey_wood_claim"].x, 229)
