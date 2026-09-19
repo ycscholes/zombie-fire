@@ -695,6 +695,21 @@ class FocusEligibilityTests(unittest.TestCase):
         click.assert_called_once_with(10, 20, "cgclick", bounds, False, zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
         sleep.assert_not_called()
 
+    def test_perform_reward_click_logs_its_project_wait(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        output = io.StringIO()
+        with (
+            patch.object(zombie_click, "focus_game_window"),
+            patch.object(zombie_click, "ensure_unchanged_game_window"),
+            patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
+            patch.object(zombie_click.time, "sleep") as sleep,
+            redirect_stdout(output),
+        ):
+            self.assertEqual(zombie_click.perform_reward_click(10, 20, "cgclick", bounds), "cgclick")
+
+        sleep.assert_called_once_with(zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
+        self.assertIn("post_reward_wait_ms=1050.0", output.getvalue())
+
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
             zombie_click.sleep_between(3.0)
