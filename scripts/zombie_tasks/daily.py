@@ -103,7 +103,7 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         "quick_times": 3,
         "ad_times": 5,
         "panel_wait": 0.3,
-        "claim_wait": 0.3,
+        "claim_wait": 1,
         "dismiss_wait": 0.3,
         "quick_reward_wait": 0.3,
         "quick_between": 0.3,
