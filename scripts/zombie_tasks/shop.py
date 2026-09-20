@@ -36,7 +36,7 @@ def command_shop_training_hall(args: argparse.Namespace) -> int:
         print(f"shop training hall dry-run: points={points}")
         return 0
 
-    backend = perform_click(*points["shop_tab"], args.backend, bounds)
+    backend = perform_tab_click(*points["shop_tab"], args.backend, bounds)
     print(f"shop training hall: opened shop tab via {backend}", flush=True)
     backend = perform_click(*points["shop_resource_tab"], args.backend, bounds)
     print(f"shop training hall: opened resource tab via {backend}", flush=True)

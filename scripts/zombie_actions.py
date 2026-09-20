@@ -90,7 +90,7 @@ ACTIONS: Dict[str, Action] = {
     "play_shop_reward_dismiss": Action(250, 633, "dismiss play shop reward popup"),
     "play_shop_modal_close": Action(401, 350, "close play shop purchase modal"),
     "play_shop_close": Action(426, 214, "close play shop"),
-    "journey_gold_claim": Action(368, 444, "visible journey gold resource bubble"),
+    "journey_gold_claim": Action(229, 684, "visible journey gold resource bubble"),
     "journey_wood_claim": Action(229, 544, "visible journey wood resource bubble"),
     "legion_daily_cut": Action(282, 548, "legion daily-cut entry"),
     "legion_cut_once": Action(254, 797, "free daily-cut button before it becomes a diamond cost"),
@@ -147,6 +147,10 @@ REWARD_ACTION_NAMES = frozenset({
     "legion_reward_claim_row4", "legion_reward_claim_row5",
     "legion_reward_claim_row6", "legion_personal_reward_claim_top",
     "legion_shop_buy", "shop_resource_gold600_free", "shop_gold_free",
+})
+
+BOTTOM_TAB_ACTION_NAMES = frozenset({
+    "battle_tab", "legion_tab", "journey_tab", "base_tab", "shop_tab",
 })
 
 

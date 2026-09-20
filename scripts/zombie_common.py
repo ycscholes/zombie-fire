@@ -36,6 +36,7 @@ ASPECT_MAX = 0.68
 # Keep a short randomized pause between helper clicks.
 POST_CLICK_WAIT_MIN = 0.8
 POST_CLICK_WAIT_MAX = 1.0
+TAB_POST_CLICK_EXTRA_SECONDS = 0.5
 MIN_WAIT_SECONDS = 0.5
 REWARD_POST_ACTION_MIN_SECONDS = 1.85
 CLICK_HOLD_SECONDS = 0.08
@@ -610,6 +611,10 @@ def wait_after_click() -> None:
     time.sleep(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX))
 
 
+def wait_after_tab_click() -> None:
+    time.sleep(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX) + TAB_POST_CLICK_EXTRA_SECONDS)
+
+
 def try_click_backend(name: str, x: int, y: int) -> tuple[bool, str]:
     try:
         if name == "cgclick":
@@ -775,6 +780,18 @@ def perform_reward_click(
     )
 
 
+def perform_tab_click(
+    x: int,
+    y: int,
+    backend: str,
+    expected_bounds: Bounds,
+) -> str:
+    """Switch a main bottom tab and add the project tab-transition delay."""
+    result = perform_click(x, y, backend, expected_bounds, False)
+    wait_after_tab_click()
+    return result
+
+
 def perform_drag(
     x1: int,
     y1: int,
@@ -827,17 +844,21 @@ def run_repeated_click_flow(
     between: float,
     reward_actions: frozenset[str] = frozenset(),
     steps: tuple[tuple[str, str, float], ...],
+    click_fn=None,
+    reward_click_fn=None,
+    dismiss_click_fn=None,
+    sleep_fn=None,
 ) -> str:
     """Run a repeated action flow and return the backend used by its last click."""
     backend = ""
     for index in range(count):
         for action_name, message, wait in steps:
             click = (
-                perform_dismiss_click
+                dismiss_click_fn or perform_dismiss_click
                 if "dismiss" in action_name
-                else perform_reward_click
+                else reward_click_fn or perform_reward_click
                 if action_name in REWARD_ACTION_NAMES or action_name in reward_actions
-                else perform_click
+                else click_fn or perform_click
             )
             backend = click(*points[action_name], backend_name, bounds)
             print(
@@ -845,9 +866,9 @@ def run_repeated_click_flow(
                 flush=True,
             )
             if wait > 0:
-                sleep_between(wait)
+                (sleep_fn or sleep_between)(wait)
         if index + 1 < count:
-            sleep_between(between)
+            (sleep_fn or sleep_between)(between)
     return backend
 
 

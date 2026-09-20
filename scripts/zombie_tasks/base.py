@@ -15,7 +15,12 @@ def _click_action(
     dismiss: bool = False,
     reward: bool = False,
 ) -> str:
-    click = perform_dismiss_click if dismiss else perform_reward_click if reward else perform_click
+    click = (
+        perform_dismiss_click if dismiss
+        else perform_reward_click if reward
+        else perform_tab_click if action in BOTTOM_TAB_ACTION_NAMES
+        else perform_click
+    )
     backend = click(*points[action], args.backend, bounds)
     verb = "dismissed" if dismiss else "clicked"
     print(f"base training hall: {action} ({verb}) via {backend}", flush=True)

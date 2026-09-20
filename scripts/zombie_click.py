@@ -48,12 +48,12 @@ _COMMON_BASE = {
     for name in (
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window", "ensure_unchanged_game_window", "focus_game_window",
-        "focus_game_window_at_start", "perform_click", "perform_dismiss_click", "perform_drag", "drag_cgclick_bin",
+        "focus_game_window_at_start", "perform_click", "perform_dismiss_click", "perform_tab_click", "perform_drag", "drag_cgclick_bin",
         "sleep_between", "ensure_game_ready_after_ad",
     )
 }
 _TASK_DEPENDENCIES = (
-        "prepare_command_bounds", "perform_click", "perform_dismiss_click", "perform_reward_click", "sleep_between",
+        "prepare_command_bounds", "perform_click", "perform_dismiss_click", "perform_reward_click", "perform_tab_click", "sleep_between",
     "scale_point", "ensure_game_ready_after_ad", "focus_game_window", "perform_drag", "drag_cgclick_bin",
     "ACTIONS", "Bounds", "set_phase_state", "PhaseProgress", "PhaseResult",
     "recover_phase",
@@ -75,7 +75,7 @@ def _sync_task_compat(module: object) -> None:
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window",
         "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "perform_click", "perform_dismiss_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
+        "perform_click", "perform_dismiss_click", "perform_tab_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
     ):
         value = globals().get(name)
         if hasattr(module, name) and value is not None and type(value).__module__.startswith("unittest.mock"):
@@ -91,7 +91,7 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window",
         "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "perform_click", "perform_dismiss_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
+        "perform_click", "perform_dismiss_click", "perform_tab_click", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
     )
     task_common_previous = {
         dependency: getattr(module, dependency)
@@ -154,7 +154,7 @@ def _common_call(name, *args, **kwargs):
         "run_osascript", "time", "shutil", "subprocess", "click_cgclick_bin", "click_quartz", "click_cliclick",
         "click_system_events", "try_click_backend", "drag_cgclick_bin", "front_window_snapshot", "classify_snapshot",
         "get_bounds", "prepare_command_bounds", "fit_game_window", "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
-        "perform_click", "ensure_unchanged_game_window", "wait_after_click", "sleep_between",
+        "perform_click", "perform_tab_click", "ensure_unchanged_game_window", "wait_after_click", "wait_after_tab_click", "sleep_between",
     ):
         value = globals().get(dependency)
         if dependency != name and value is not None and type(value).__module__.startswith("unittest.mock"):
@@ -172,6 +172,7 @@ def focus_game_window(*args, **kwargs): return _common_call("focus_game_window",
 def focus_game_window_at_start(*args, **kwargs): return _common_call("focus_game_window_at_start", *args, **kwargs)
 def perform_click(*args, **kwargs): return _common_call("perform_click", *args, **kwargs)
 def perform_reward_click(*args, **kwargs): return _common_call("perform_reward_click", *args, **kwargs)
+def perform_tab_click(*args, **kwargs): return _common_call("perform_tab_click", *args, **kwargs)
 def start_input_session(*args, **kwargs): return _common_call("start_input_session", *args, **kwargs)
 def bind_input_session(*args, **kwargs): return _common_call("bind_input_session", *args, **kwargs)
 def end_input_session(*args, **kwargs): return _common_call("end_input_session", *args, **kwargs)
@@ -330,7 +331,7 @@ def command_click(args: argparse.Namespace) -> int:
     action = resolve_action(args.name)
     bounds = prepare_command_bounds(args)
     x, y = scale_point(action, bounds)
-    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_click
+    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_tab_click if args.name in BOTTOM_TAB_ACTION_NAMES else perform_click
     backend = click(x, y, args.backend, bounds)
     print(f"clicked {args.name} at {x},{y} via {backend}")
     return 0
@@ -343,7 +344,7 @@ def command_seq(args: argparse.Namespace) -> int:
     bounds = prepare_command_bounds(args)
     x, y = scale_point(action, bounds)
     backend = ""
-    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_click
+    click = perform_reward_click if args.name in REWARD_ACTION_NAMES else perform_tab_click if args.name in BOTTOM_TAB_ACTION_NAMES else perform_click
     for idx in range(args.times):
         backend = click(x, y, args.backend, bounds)
         if idx + 1 < args.times:

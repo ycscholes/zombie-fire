@@ -84,7 +84,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         )
         return 0
 
-    backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    backend = perform_tab_click(*points["legion_tab"], args.backend, bounds)
     set_phase_state(args, "legion_opened")
     print(f"legion daily rewards: clicked legion tab via {backend}", flush=True)
     backend = perform_click(*points["legion_daily_cut"], args.backend, bounds)
@@ -149,7 +149,7 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
             f"points={points}"
         )
         return 0
-    backend = perform_click(*points["legion_tab"], args.backend, bounds)
+    backend = perform_tab_click(*points["legion_tab"], args.backend, bounds)
     set_phase_state(args, "legion_opened")
     print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
     backend = perform_click(*points["legion_foreign_challenge"], args.backend, bounds)
@@ -171,6 +171,10 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
             ("confirm", "legion reward claims sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
             ("dismiss", "legion reward claims sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
+        click_fn=perform_click,
+        reward_click_fn=perform_reward_click,
+        dismiss_click_fn=perform_dismiss_click,
+        sleep_fn=sleep_between,
     )
     for action, message, wait in (
         ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),

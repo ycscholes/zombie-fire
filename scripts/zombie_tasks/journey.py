@@ -19,7 +19,7 @@ def command_journey_resource_claim(args: argparse.Namespace) -> int:
         print(f"journey resource claim dry-run: points={points}")
         return 0
 
-    backend = perform_click(*points["journey_tab"], args.backend, bounds)
+    backend = perform_tab_click(*points["journey_tab"], args.backend, bounds)
     print(f"journey resource claim: opened journey tab via {backend}", flush=True)
     backend = perform_reward_click(*points["journey_gold_claim"], args.backend, bounds)
     print(f"journey resource claim: collected gold resource via {backend}", flush=True)

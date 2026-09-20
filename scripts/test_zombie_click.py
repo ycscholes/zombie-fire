@@ -418,6 +418,16 @@ class FocusEligibilityTests(unittest.TestCase):
                 "perform_click",
                 side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
             ),
+            patch.object(
+                zombie_click,
+                "perform_tab_click",
+                side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
+            ),
+            patch.object(
+                zombie_click._common,
+                "perform_click",
+                side_effect=lambda x, y, *_: (clicks.append((x, y)), "cgclick")[1],
+            ),
             patch.object(zombie_click, "sleep_between"),
         ):
             self.assertEqual(zombie_click.command_journey_resource_claim(args), 0)
@@ -730,6 +740,32 @@ class FocusEligibilityTests(unittest.TestCase):
             {"patrol_claim", "quick_patrol", "ad_close_top", "journey_gold_claim", "shop_gold_free"}
             <= zombie_click.REWARD_ACTION_NAMES
         )
+
+    def test_generic_bottom_tabs_use_the_extended_tab_interval(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        args = zombie_click.build_parser().parse_args(["click", "journey_tab"])
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click, "perform_tab_click", return_value="cgclick") as tab_click,
+            patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
+        ):
+            self.assertEqual(zombie_click.command_click(args), 0)
+
+        tab_click.assert_called_once()
+        click.assert_not_called()
+        self.assertIn("journey_tab", zombie_click.BOTTOM_TAB_ACTION_NAMES)
+
+    def test_perform_tab_click_adds_half_second_after_normal_click_wait(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
+            patch.object(zombie_click.random, "uniform", return_value=zombie_click.POST_CLICK_WAIT_MIN),
+            patch.object(zombie_click.time, "sleep") as sleep,
+        ):
+            self.assertEqual(zombie_click.perform_tab_click(10, 20, "cgclick", bounds), "cgclick")
+
+        click.assert_called_once_with(10, 20, "cgclick", bounds, False)
+        sleep.assert_called_once_with(zombie_click.POST_CLICK_WAIT_MIN + zombie_click.TAB_POST_CLICK_EXTRA_SECONDS)
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
