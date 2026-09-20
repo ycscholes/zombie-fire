@@ -5,6 +5,17 @@ from __future__ import annotations
 from ..zombie_common import *
 from ..zombie_actions import *
 
+BUSINESS_WAITS = {
+    "patrol_truck": 0.3,
+    "patrol_claim": 0.3,
+    "quick_patrol_reward": 0.3,
+    "quick_patrol_between": 0.3,
+    "patrol_ad_start": 33.0,
+    "patrol_ad_close": 1.5,
+    "patrol_ad_between": 0.5,
+    "patrol_close": 0.3,
+}
+
 def command_patrol_ads_batch(args: argparse.Namespace) -> int:
     if args.times < 1:
         raise ClickError("--times must be >= 1")
@@ -13,8 +24,7 @@ def command_patrol_ads_batch(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "patrol ad batch dry-run: "
-            f"times={args.times}, ad_wait={args.ad_wait}, reward_wait={args.reward_wait}, "
-            f"between={args.between}, points={points}"
+            f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
     backend = run_repeated_click_flow(
@@ -22,10 +32,10 @@ def command_patrol_ads_batch(args: argparse.Namespace) -> int:
         bounds=bounds,
         backend_name=args.backend,
         count=args.times,
-        between=args.between,
+        between=BUSINESS_WAITS["patrol_ad_between"],
         steps=(
-            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", args.ad_wait),
-            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", args.reward_wait),
+            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", BUSINESS_WAITS["patrol_ad_start"]),
+            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", BUSINESS_WAITS["patrol_ad_close"]),
             ("reward_dismiss", "patrol ad {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )
@@ -91,18 +101,7 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             "quick_times": args.quick_times,
             "ad_times": args.ad_times,
             "fit": args.fit and not bool(args.mock_bounds),
-            "waits": {
-                "panel_wait": args.panel_wait,
-                "claim_wait": args.claim_wait,
-                "dismiss_wait": args.dismiss_wait,
-                "quick_reward_wait": args.quick_reward_wait,
-                "quick_between": args.quick_between,
-                "ad_wait": args.ad_wait,
-                "ad_close_wait": args.ad_close_wait,
-                "ad_reward_wait": args.ad_reward_wait,
-                "ad_between": args.ad_between,
-                "close_wait": args.close_wait,
-            },
+            "event_waits": BUSINESS_WAITS,
             "points": points,
         }
         if args.json:
@@ -111,25 +110,25 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             print(
                 "patrol full from-home dry-run: "
                 f"quick_times={args.quick_times}, ad_times={args.ad_times}, "
-                f"fit={plan['fit']}, waits={plan['waits']}, points={points}"
+                f"fit={plan['fit']}, event_waits={plan['event_waits']}, points={points}"
             )
         return 0
 
     backend = perform_click(*points["patrol_truck"], args.backend, bounds)
     set_phase_state(args, "patrol_opened")
     print(f"patrol full: clicked patrol truck via {backend}", flush=True)
-    sleep_between(args.panel_wait)
+    sleep_between(BUSINESS_WAITS["patrol_truck"])
 
     backend = perform_reward_click(*points["patrol_claim"], args.backend, bounds)
     print(f"patrol full: clicked patrol claim via {backend}", flush=True)
-    sleep_between(args.claim_wait)
+    sleep_between(BUSINESS_WAITS["patrol_claim"])
     backend = dismiss_reward_once(points, args.backend, bounds, label="patrol full claim")
-    sleep_between(args.quick_between)
+    sleep_between(BUSINESS_WAITS["quick_patrol_between"])
 
     for idx in range(args.quick_times):
         backend = perform_reward_click(*points["quick_patrol"], args.backend, bounds)
         print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
-        sleep_between(args.quick_reward_wait)
+        sleep_between(BUSINESS_WAITS["quick_patrol_reward"])
         backend = dismiss_reward_once(
             points,
             args.backend,
@@ -137,17 +136,16 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             label=f"patrol full quick {idx + 1}/{args.quick_times}",
         )
         if idx + 1 < args.quick_times:
-            sleep_between(args.quick_between)
+            sleep_between(BUSINESS_WAITS["quick_patrol_between"])
 
-    sleep_between(args.ad_between)
+    sleep_between(BUSINESS_WAITS["patrol_ad_between"])
     for idx in range(args.ad_times):
         backend = perform_click(*points["quick_patrol"], args.backend, bounds)
         print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
-        sleep_between(args.ad_wait)
+        sleep_between(BUSINESS_WAITS["patrol_ad_start"])
         backend = perform_click(*points["ad_close_top"], args.backend, bounds)
         print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
-        sleep_between(args.ad_close_wait)
-        sleep_between(args.ad_reward_wait)
+        sleep_between(BUSINESS_WAITS["patrol_ad_close"])
         ensure_game_ready_after_ad(bounds)
         backend = dismiss_reward_once(
             points,
@@ -156,9 +154,9 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             label=f"patrol full ad {idx + 1}/{args.ad_times}",
         )
         if idx + 1 < args.ad_times:
-            sleep_between(args.ad_between)
+            sleep_between(BUSINESS_WAITS["patrol_ad_between"])
 
-    sleep_between(args.close_wait)
+    sleep_between(BUSINESS_WAITS["patrol_close"])
     backend = perform_click(*points["patrol_close"], args.backend, bounds)
     print(
         "patrol full complete: "
@@ -182,22 +180,21 @@ def command_patrol_ads_from_home(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "patrol ad from-home dry-run: "
-            f"times={args.times}, panel_wait={args.panel_wait}, ad_wait={args.ad_wait}, "
-            f"reward_wait={args.reward_wait}, between={args.between}, points={points}"
+            f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
     backend = perform_click(*points["patrol_truck"], args.backend, bounds)
     print(f"patrol ad from-home: clicked patrol truck via {backend}", flush=True)
-    sleep_between(args.panel_wait)
+    sleep_between(BUSINESS_WAITS["patrol_truck"])
     backend = run_repeated_click_flow(
         points=points,
         bounds=bounds,
         backend_name=args.backend,
         count=args.times,
-        between=args.between,
+        between=BUSINESS_WAITS["patrol_ad_between"],
         steps=(
-            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", args.ad_wait),
-            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", args.reward_wait),
+            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", BUSINESS_WAITS["patrol_ad_start"]),
+            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", BUSINESS_WAITS["patrol_ad_close"]),
             ("reward_dismiss", "patrol ad {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )
@@ -214,8 +211,7 @@ def command_patrol_quick_batch(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "patrol quick batch dry-run: "
-            f"times={args.times}, reward_wait={args.reward_wait}, "
-            f"between={args.between}, points={points}"
+            f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
     backend = run_repeated_click_flow(
@@ -223,9 +219,9 @@ def command_patrol_quick_batch(args: argparse.Namespace) -> int:
         bounds=bounds,
         backend_name=args.backend,
         count=args.times,
-        between=args.between,
+        between=BUSINESS_WAITS["quick_patrol_between"],
         steps=(
-            ("quick_patrol", "quick patrol {index}/{count}: clicked quick-patrol via {backend}", args.reward_wait),
+            ("quick_patrol", "quick patrol {index}/{count}: clicked quick-patrol via {backend}", BUSINESS_WAITS["quick_patrol_reward"]),
             ("reward_dismiss", "quick patrol {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )

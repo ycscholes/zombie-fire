@@ -773,10 +773,10 @@ class FocusEligibilityTests(unittest.TestCase):
             patch.object(zombie_click, "perform_click", return_value="cgclick"),
             patch.object(zombie_click, "sleep_between") as wait,
         ):
-            zombie_click.perform_action("mail_entry", 10, 20, "cgclick", bounds)
-            zombie_click.perform_action("mail_menu_dismiss", 10, 20, "cgclick", bounds)
+            zombie_click.perform_action("mail_entry", 10, 20, "cgclick", bounds, {"mail_entry": 0.3})
+            zombie_click.perform_action("mail_menu_dismiss", 10, 20, "cgclick", bounds, {"mail_entry": 0.3})
 
-        wait.assert_called_once_with(zombie_click.ACTION_BUSINESS_WAIT_SECONDS["mail_entry"])
+        wait.assert_called_once_with(0.3)
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:
@@ -972,7 +972,7 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click.scale_point(zombie_click.ACTIONS["legion_foreign_challenge_back"], bounds),
             ],
         )
-        self.assertEqual(waits, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+        self.assertEqual(waits, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
 
     def test_legion_reward_claims_rejects_row_selection_flags(self) -> None:
         with self.assertRaises(SystemExit):
@@ -1009,11 +1009,7 @@ class FocusEligibilityTests(unittest.TestCase):
         delegated = claims.call_args.args[0]
         self.assertIs(delegated.mock_bounds, bounds)
         self.assertEqual(delegated.sweep_times, args.sweep_times)
-        self.assertEqual(delegated.confirm_wait, args.confirm_wait)
-        self.assertEqual(delegated.sweep_reward_wait, args.sweep_reward_wait)
-        self.assertEqual(delegated.sweep_between, args.sweep_between)
-        self.assertEqual(delegated.reward_page_wait, args.reward_page_wait)
-        self.assertEqual(delegated.reward_wait, args.reward_wait)
+        self.assertFalse(hasattr(delegated, "confirm_wait"))
         shop.assert_called_once()
         self.assertIs(shop.call_args.args[0].mock_bounds, bounds)
 
@@ -1077,11 +1073,9 @@ class FocusEligibilityTests(unittest.TestCase):
         ):
             self.assertEqual(zombie_click.command_patrol_full_from_home(args), 0)
 
-        close_wait = events.index(("sleep", 1.25))
-        reward_wait = events.index(("sleep", 2.5))
+        close_wait = events.index(("sleep", 1.5))
         ready = events.index("ready")
-        self.assertLess(close_wait, reward_wait)
-        self.assertLess(reward_wait, ready)
+        self.assertLess(close_wait, ready)
         first_reward_dismiss_after_ready = next(
             index
             for index, event in enumerate(events[ready + 1 :], start=ready + 1)

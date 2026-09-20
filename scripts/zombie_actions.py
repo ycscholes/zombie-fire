@@ -153,16 +153,5 @@ BOTTOM_TAB_ACTION_NAMES = frozenset({
     "battle_tab", "legion_tab", "journey_tab", "base_tab", "shop_tab",
 })
 
-ACTION_BUSINESS_WAIT_SECONDS = {
-    "right_menu": 0.3,
-    "mail_entry": 0.3,
-    "mail_close": 0.3,
-    "calendar_top": 0.3,
-    "patrol_truck": 0.3,
-    "patrol_ad_start": 33.0,
-    "patrol_ad_close": 1.0,
-}
-
-
 def action_names() -> Iterable[str]:
     return sorted(ACTIONS)

@@ -19,7 +19,6 @@ from typing import Callable, Dict, Iterable, Tuple
 
 from .zombie_actions import (
     ACTIONS,
-    ACTION_BUSINESS_WAIT_SECONDS,
     BOTTOM_TAB_ACTION_NAMES,
     REWARD_ACTION_NAMES,
     Action,
@@ -841,7 +840,14 @@ def sleep_between(seconds: float) -> None:
     time.sleep(max(MIN_WAIT_SECONDS, seconds - 0.5))
 
 
-def perform_action(action_name: str, x: int, y: int, backend: str, expected_bounds: Bounds) -> str:
+def perform_action(
+    action_name: str,
+    x: int,
+    y: int,
+    backend: str,
+    expected_bounds: Bounds,
+    business_waits: Dict[str, float] | None = None,
+) -> str:
     """Deliver a named action and its one configured business wait."""
     if action_name in REWARD_ACTION_NAMES:
         result = perform_reward_click(x, y, backend, expected_bounds)
@@ -849,7 +855,7 @@ def perform_action(action_name: str, x: int, y: int, backend: str, expected_boun
         result = perform_tab_click(x, y, backend, expected_bounds)
     else:
         result = perform_click(x, y, backend, expected_bounds)
-    wait = ACTION_BUSINESS_WAIT_SECONDS.get(action_name)
+    wait = (business_waits or {}).get(action_name)
     if wait is not None:
         sleep_between(wait)
     return result

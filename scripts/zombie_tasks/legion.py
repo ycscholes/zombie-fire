@@ -7,6 +7,14 @@ from ..zombie_actions import *
 
 from .base import scroll_to_bottom as _base_scroll_to_bottom
 
+BUSINESS_WAITS = {
+    "legion_foreign_challenge": 0.3,
+    "legion_sweep": 0.3,
+    "legion_sweep_confirm": 0.3,
+    "legion_sweep_between": 0.3,
+    "legion_reward_left": 0.3,
+}
+
 
 def scroll_legion_shop_to_bottom(args: argparse.Namespace) -> None:
     """Scroll the legion shop list to its bottom using the proven canvas drag."""
@@ -64,10 +72,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "legion daily rewards dry-run: "
-            f"sweep_times={args.sweep_times}, confirm_wait={args.confirm_wait}, "
-            f"sweep_reward_wait={args.sweep_reward_wait}, sweep_between={args.sweep_between}, "
-            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
-            f"points={points}"
+            f"sweep_times={args.sweep_times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         command_legion_reward_claims(
             argparse.Namespace(
@@ -75,11 +80,6 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
                 backend=args.backend,
                 dry_run=True,
                 sweep_times=args.sweep_times,
-                confirm_wait=args.confirm_wait,
-                sweep_reward_wait=args.sweep_reward_wait,
-                sweep_between=args.sweep_between,
-                reward_page_wait=args.reward_page_wait,
-                reward_wait=args.reward_wait,
             )
         )
         return 0
@@ -103,11 +103,6 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
             backend=args.backend,
             dry_run=False,
             sweep_times=args.sweep_times,
-            confirm_wait=args.confirm_wait,
-            sweep_reward_wait=args.sweep_reward_wait,
-            sweep_between=args.sweep_between,
-            reward_page_wait=args.reward_page_wait,
-            reward_wait=args.reward_wait,
             phase_progress=getattr(args, "phase_progress", None),
         )
     )
@@ -143,16 +138,13 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "legion reward claims dry-run: "
-            f"sweep_times={args.sweep_times}, confirm_wait={args.confirm_wait}, "
-            f"sweep_reward_wait={args.sweep_reward_wait}, sweep_between={args.sweep_between}, "
-            f"reward_page_wait={args.reward_page_wait}, reward_wait={args.reward_wait}, "
-            f"points={points}"
+            f"sweep_times={args.sweep_times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
     backend = perform_tab_click(*points["legion_tab"], args.backend, bounds)
     set_phase_state(args, "legion_opened")
     print(f"legion reward claims: clicked legion tab via {backend}", flush=True)
-    backend = perform_click(*points["legion_foreign_challenge"], args.backend, bounds)
+    backend = perform_action("legion_foreign_challenge", *points["legion_foreign_challenge"], args.backend, bounds, BUSINESS_WAITS)
     set_phase_state(args, "legion_foreign_challenge_opened")
     print(f"legion reward claims: clicked foreign challenge via {backend}", flush=True)
     run_repeated_click_flow(
@@ -164,11 +156,11 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         bounds=bounds,
         backend_name=args.backend,
         count=args.sweep_times,
-        between=args.sweep_between,
+        between=BUSINESS_WAITS["legion_sweep_between"],
         reward_actions=frozenset({"confirm"}),
         steps=(
-            ("sweep", "legion reward claims sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
-            ("confirm", "legion reward claims sweep {index}/{count}: clicked confirm via {backend}", args.sweep_reward_wait),
+            ("sweep", "legion reward claims sweep {index}/{count}: clicked sweep via {backend}", BUSINESS_WAITS["legion_sweep"]),
+            ("confirm", "legion reward claims sweep {index}/{count}: clicked confirm via {backend}", BUSINESS_WAITS["legion_sweep_confirm"]),
             ("dismiss", "legion reward claims sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
         click_fn=perform_click,
@@ -177,7 +169,7 @@ def command_legion_reward_claims(args: argparse.Namespace) -> int:
         sleep_fn=sleep_between,
     )
     for action, message, wait in (
-        ("legion_reward_left", "clicked rewards tab", args.reward_page_wait),
+        ("legion_reward_left", "clicked rewards tab", BUSINESS_WAITS["legion_reward_left"]),
         ("legion_reward_claim_top", "clicked legion all-rewards claim", 0),
         ("reward_dismiss", "dismissed legion reward", 0),
         ("legion_personal_reward_tab", "clicked personal rewards tab", 0),
@@ -220,8 +212,7 @@ def command_legion_sweep_batch(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "legion sweep batch dry-run: "
-            f"times={args.times}, confirm_wait={args.confirm_wait}, "
-            f"reward_wait={args.reward_wait}, between={args.between}, points={points}"
+            f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
     backend = run_repeated_click_flow(
@@ -229,11 +220,11 @@ def command_legion_sweep_batch(args: argparse.Namespace) -> int:
         bounds=bounds,
         backend_name=args.backend,
         count=args.times,
-        between=args.between,
+        between=BUSINESS_WAITS["legion_sweep_between"],
         reward_actions=frozenset({"confirm"}),
         steps=(
-            ("sweep", "legion sweep {index}/{count}: clicked sweep via {backend}", args.confirm_wait),
-            ("confirm", "legion sweep {index}/{count}: clicked confirm via {backend}", args.reward_wait),
+            ("sweep", "legion sweep {index}/{count}: clicked sweep via {backend}", BUSINESS_WAITS["legion_sweep"]),
+            ("confirm", "legion sweep {index}/{count}: clicked confirm via {backend}", BUSINESS_WAITS["legion_sweep_confirm"]),
             ("dismiss", "legion sweep {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )
