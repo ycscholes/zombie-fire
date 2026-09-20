@@ -5,6 +5,10 @@ from __future__ import annotations
 from ..zombie_common import *
 from ..zombie_actions import *
 
+BUSINESS_WAITS = {
+    "global_rescue_challenge": 1.0,
+}
+
 
 def _click_action(
     args: argparse.Namespace,
@@ -15,13 +19,14 @@ def _click_action(
     dismiss: bool = False,
     reward: bool = False,
 ) -> str:
-    click = (
-        perform_dismiss_click if dismiss
-        else perform_reward_click if reward
-        else perform_tab_click if action in BOTTOM_TAB_ACTION_NAMES
-        else perform_click
-    )
-    backend = click(*points[action], args.backend, bounds)
+    if dismiss:
+        backend = perform_dismiss_click(*points[action], args.backend, bounds)
+    elif reward:
+        backend = perform_reward_click(*points[action], args.backend, bounds)
+    elif action in BOTTOM_TAB_ACTION_NAMES:
+        backend = perform_tab_click(*points[action], args.backend, bounds)
+    else:
+        backend = perform_action(action, *points[action], args.backend, bounds, BUSINESS_WAITS)
     verb = "dismissed" if dismiss else "clicked"
     print(f"base training hall: {action} ({verb}) via {backend}", flush=True)
     return backend
