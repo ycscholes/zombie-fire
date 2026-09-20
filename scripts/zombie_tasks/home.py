@@ -19,26 +19,21 @@ def command_mail_claim(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "mail claim dry-run: "
-            f"menu_wait={args.menu_wait}, open_wait={args.open_wait}, "
-            f"reward_wait={args.reward_wait}, points={points}"
+            f"event_waits={ACTION_BUSINESS_WAIT_SECONDS}, points={points}"
         )
         return 0
-    backend = perform_click(*points["right_menu"], args.backend, bounds)
+    backend = perform_action("right_menu", *points["right_menu"], args.backend, bounds)
     set_phase_state(args, "mail_menu_opened")
     print(f"mail claim: clicked top-right menu via {backend}", flush=True)
-    sleep_between(args.menu_wait)
-    backend = perform_click(*points["mail_entry"], args.backend, bounds)
+    backend = perform_action("mail_entry", *points["mail_entry"], args.backend, bounds)
     set_phase_state(args, "mail_opened")
     print(f"mail claim: clicked mail entry via {backend}", flush=True)
-    sleep_between(args.open_wait)
-    backend = perform_reward_click(*points["mail_claim_all"], args.backend, bounds)
+    backend = perform_action("mail_claim_all", *points["mail_claim_all"], args.backend, bounds)
     print(f"mail claim: clicked one-click claim via {backend}", flush=True)
-    sleep_between(args.reward_wait)
     backend = perform_dismiss_click(*points["mail_reward_popup_dismiss"], args.backend, bounds)
     print(f"mail claim: clicked reward-dismiss via {backend}", flush=True)
-    backend = perform_click(*points["mail_close"], args.backend, bounds)
+    backend = perform_action("mail_close", *points["mail_close"], args.backend, bounds)
     print(f"mail claim: clicked close via {backend}", flush=True)
-    sleep_between(args.menu_wait)
     backend = perform_click(*points["mail_menu_dismiss"], args.backend, bounds)
     print(f"mail claim complete: dismissed menu via {backend}")
     return 0
@@ -55,17 +50,15 @@ def command_calendar_claim(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "calendar claim dry-run: "
-            f"open_wait={args.open_wait}, reward_wait={args.reward_wait}, points={points}"
+            f"event_waits={ACTION_BUSINESS_WAIT_SECONDS}, points={points}"
         )
         return 0
 
-    backend = perform_click(*points["calendar_top"], args.backend, bounds)
+    backend = perform_action("calendar_top", *points["calendar_top"], args.backend, bounds)
     set_phase_state(args, "calendar_opened")
     print(f"calendar claim: opened calendar via {backend}", flush=True)
-    sleep_between(args.open_wait)
-    backend = perform_reward_click(*points["calendar_gift"], args.backend, bounds)
+    backend = perform_action("calendar_gift", *points["calendar_gift"], args.backend, bounds)
     print(f"calendar claim: clicked visible free gift via {backend}", flush=True)
-    sleep_between(args.reward_wait)
     backend = perform_dismiss_click(*points["reward_dismiss"], args.backend, bounds)
     print(f"calendar claim: dismissed reward via {backend}", flush=True)
     backend = perform_click(*points["calendar_close"], args.backend, bounds)
@@ -86,7 +79,7 @@ def command_welfare_claim(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(
             "welfare claim dry-run: "
-            f"open_wait={args.open_wait}, reward_wait={args.reward_wait}, points={points}"
+            f"event_waits={ACTION_BUSINESS_WAIT_SECONDS}, points={points}"
         )
         return 0
 

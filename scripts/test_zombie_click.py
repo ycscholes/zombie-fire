@@ -465,7 +465,7 @@ class FocusEligibilityTests(unittest.TestCase):
         )
 
     def test_journey_resource_targets_remain_at_the_visible_bubble_centers(self) -> None:
-        self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 368)
+        self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 229)
         self.assertEqual(zombie_click.ACTIONS["journey_wood_claim"].x, 229)
 
     def test_cgclick_emits_a_complete_tap_sequence(self) -> None:
@@ -766,6 +766,17 @@ class FocusEligibilityTests(unittest.TestCase):
 
         click.assert_called_once_with(10, 20, "cgclick", bounds, False)
         sleep.assert_called_once_with(zombie_click.POST_CLICK_WAIT_MIN + zombie_click.TAB_POST_CLICK_EXTRA_SECONDS)
+
+    def test_named_action_applies_only_its_configured_business_wait(self) -> None:
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with (
+            patch.object(zombie_click, "perform_click", return_value="cgclick"),
+            patch.object(zombie_click, "sleep_between") as wait,
+        ):
+            zombie_click.perform_action("mail_entry", 10, 20, "cgclick", bounds)
+            zombie_click.perform_action("mail_menu_dismiss", 10, 20, "cgclick", bounds)
+
+        wait.assert_called_once_with(zombie_click.ACTION_BUSINESS_WAIT_SECONDS["mail_entry"])
 
     def test_waits_reduce_configured_intervals_and_click_pacing(self) -> None:
         with patch.object(zombie_click.time, "sleep") as sleep:

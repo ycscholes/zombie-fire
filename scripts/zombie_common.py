@@ -17,7 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Tuple
 
-from .zombie_actions import ACTIONS, REWARD_ACTION_NAMES, Action
+from .zombie_actions import (
+    ACTIONS,
+    ACTION_BUSINESS_WAIT_SECONDS,
+    BOTTOM_TAB_ACTION_NAMES,
+    REWARD_ACTION_NAMES,
+    Action,
+)
 
 import subprocess
 import sys
@@ -38,7 +44,7 @@ POST_CLICK_WAIT_MIN = 0.8
 POST_CLICK_WAIT_MAX = 1.0
 TAB_POST_CLICK_EXTRA_SECONDS = 0.5
 MIN_WAIT_SECONDS = 0.5
-REWARD_POST_ACTION_MIN_SECONDS = 1.55
+REWARD_POST_ACTION_MIN_SECONDS = 1.85
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
 WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
@@ -641,7 +647,7 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
 
 def log_operation(kind: str, status: str, details: str) -> None:
     """Write an auditable result for one physical input operation."""
-    # print(f"operation: {kind} status={status} {details}", flush=True)
+    print(f"operation: {kind} status={status} {details}", flush=True)
 
 
 def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
@@ -833,6 +839,20 @@ def perform_drag(
 
 def sleep_between(seconds: float) -> None:
     time.sleep(max(MIN_WAIT_SECONDS, seconds - 0.5))
+
+
+def perform_action(action_name: str, x: int, y: int, backend: str, expected_bounds: Bounds) -> str:
+    """Deliver a named action and its one configured business wait."""
+    if action_name in REWARD_ACTION_NAMES:
+        result = perform_reward_click(x, y, backend, expected_bounds)
+    elif action_name in BOTTOM_TAB_ACTION_NAMES:
+        result = perform_tab_click(x, y, backend, expected_bounds)
+    else:
+        result = perform_click(x, y, backend, expected_bounds)
+    wait = ACTION_BUSINESS_WAIT_SECONDS.get(action_name)
+    if wait is not None:
+        sleep_between(wait)
+    return result
 
 
 def run_repeated_click_flow(
