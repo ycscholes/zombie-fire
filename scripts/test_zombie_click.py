@@ -684,7 +684,7 @@ class FocusEligibilityTests(unittest.TestCase):
         click.assert_called_once_with(10, 20, "cgclick", bounds, False)
         sleep.assert_not_called()
 
-    def test_perform_reward_click_waits_more_than_one_point_five_seconds(self) -> None:
+    def test_perform_reward_click_waits_more_than_one_point_eight_seconds(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         with (
             patch.object(zombie_click, "perform_click", return_value="cgclick") as click,
@@ -708,7 +708,7 @@ class FocusEligibilityTests(unittest.TestCase):
             self.assertEqual(zombie_click.perform_reward_click(10, 20, "cgclick", bounds), "cgclick")
 
         sleep.assert_called_once_with(zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
-        self.assertIn("post_reward_wait_ms=1550.0", output.getvalue())
+        self.assertIn("post_reward_wait_ms=1850.0", output.getvalue())
         self.assertIn("post_reward_wait_actual_ms=", output.getvalue())
 
     def test_generic_reward_actions_use_the_project_reward_interval(self) -> None:
