@@ -39,11 +39,12 @@ MIN_HEIGHT = 760
 ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
 # Keep a short randomized pause between helper clicks.
-POST_CLICK_WAIT_MIN = 0.8
-POST_CLICK_WAIT_MAX = 1.0
+POST_CLICK_WAIT_MIN = 0.4
+POST_CLICK_WAIT_MAX = 0.6
 TAB_POST_CLICK_EXTRA_SECONDS = 0.5
 MIN_WAIT_SECONDS = 0.5
-REWARD_POST_ACTION_MIN_SECONDS = 1.85
+REWARD_POST_ACTION_MIN_SECONDS = 1.55
+DISMISS_POST_ACTION_MIN_SECONDS = 0.2
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
 WINDOW_FOCUS_TIMEOUT_SECONDS = 8.0
@@ -646,7 +647,7 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
 
 def log_operation(kind: str, status: str, details: str) -> None:
     """Write an auditable result for one physical input operation."""
-    print(f"operation: {kind} status={status} {details}", flush=True)
+    # print(f"operation: {kind} status={status} {details}", flush=True)
 
 
 def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
@@ -710,7 +711,7 @@ def perform_click(
     backend: str = "auto",
     expected_bounds: Bounds | None = None,
     wait_after: bool = True,
-    post_reward_wait_seconds: float | None = None,
+    extra_wait_seconds: float | None = None,
 ) -> str:
     if expected_bounds is None:
         raise ClickDeliveryError("real clicks require calibrated game-window bounds")
@@ -726,8 +727,8 @@ def perform_click(
             delivery_ms = (time.monotonic() - delivery_started_at) * 1000
             if clicked:
                 reward_wait_detail = (
-                    f" post_reward_wait_ms={post_reward_wait_seconds * 1000:.1f}"
-                    if post_reward_wait_seconds is not None
+                    f" post_reward_wait_ms={extra_wait_seconds * 1000:.1f}"
+                    if extra_wait_seconds is not None
                     else ""
                 )
                 log_operation(
@@ -736,13 +737,13 @@ def perform_click(
                     f"backend={candidate} point=({x},{y}) mode={mode} {session_diagnostic} "
                     f"preflight_ms={preflight_ms:.1f} deliver_ms={delivery_ms:.1f}{reward_wait_detail}",
                 )
-                if post_reward_wait_seconds is not None:
+                if extra_wait_seconds is not None:
                     reward_wait_started_at = time.monotonic()
-                    time.sleep(post_reward_wait_seconds)
+                    time.sleep(extra_wait_seconds)
                     log_operation(
                         "reward-wait",
                         "success",
-                        f"minimum_ms={post_reward_wait_seconds * 1000:.1f} "
+                        f"minimum_ms={extra_wait_seconds * 1000:.1f} "
                         f"post_reward_wait_actual_ms={(time.monotonic() - reward_wait_started_at) * 1000:.1f}",
                     )
                 elif wait_after:
@@ -765,7 +766,7 @@ def perform_dismiss_click(
     expected_bounds: Bounds,
 ) -> str:
     """Dismiss a reward popup without adding a fixed post-dismiss wait."""
-    return perform_click(x, y, backend, expected_bounds, False)
+    return perform_click(x, y, backend, expected_bounds, False, DISMISS_POST_ACTION_MIN_SECONDS)
 
 
 def perform_reward_click(
