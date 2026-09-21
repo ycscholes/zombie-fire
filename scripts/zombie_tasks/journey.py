@@ -5,6 +5,12 @@ from __future__ import annotations
 from ..zombie_common import *
 from ..zombie_actions import *
 
+
+BUSINESS_WAITS = {
+    "journey_tab": 1.0,
+}
+
+
 def command_journey_resource_claim(args: argparse.Namespace) -> int:
     """Open Journey and collect the verified gold and wood resource bubbles once each."""
     bounds = prepare_command_bounds(args)
@@ -19,7 +25,13 @@ def command_journey_resource_claim(args: argparse.Namespace) -> int:
         print(f"journey resource claim dry-run: points={points}")
         return 0
 
-    backend = perform_tab_click(*points["journey_tab"], args.backend, bounds)
+    backend = perform_action(
+        "journey_tab",
+        *points["journey_tab"],
+        args.backend,
+        bounds,
+        BUSINESS_WAITS,
+    )
     print(f"journey resource claim: opened journey tab via {backend}", flush=True)
     backend = perform_reward_click(*points["journey_gold_claim"], args.backend, bounds)
     print(f"journey resource claim: collected gold resource via {backend}", flush=True)
