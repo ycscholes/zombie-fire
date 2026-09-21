@@ -7,14 +7,26 @@ from ..zombie_actions import *
 
 BUSINESS_WAITS = {
     "patrol_truck": 0.3,
-    "patrol_claim": 0.3,
-    "quick_patrol_reward": 0.3,
+    "patrol_claim": 1,
+    "quick_patrol_reward": 0.6,
     "quick_patrol_between": 0.3,
     "patrol_ad_start": 33.0,
     "patrol_ad_close": 1.5,
     "patrol_ad_between": 0.5,
+    "patrol_reward_dismiss": 0.3,
     "patrol_close": 0.3,
 }
+
+
+def _perform_event(
+    event: str,
+    point: tuple[int, int],
+    args: argparse.Namespace,
+    bounds: Bounds,
+    *,
+    kind: str | None = None,
+) -> str:
+    return perform_action(event, *point, args.backend, bounds, BUSINESS_WAITS, kind=kind)
 
 def command_patrol_ads_batch(args: argparse.Namespace) -> int:
     if args.times < 1:
@@ -54,17 +66,27 @@ def patrol_full_points(bounds: Bounds) -> Dict[str, Tuple[int, int]]:
 
 
 def dismiss_reward_once(
-    points: Dict[str, Tuple[int, int]],
-    backend_name: str,
+    args: argparse.Namespace | Dict[str, Tuple[int, int]],
+    points: Dict[str, Tuple[int, int]] | str,
     bounds: Bounds,
     *,
     label: str,
 ) -> str:
     # 奖励弹窗关闭后不再补点同一坐标，避免第二击落到已恢复的游戏页面。
-    backend = perform_dismiss_click(*points["reward_dismiss"], backend_name, bounds)
+    if isinstance(args, dict):
+        backend = perform_dismiss_click(*args["reward_dismiss"], str(points), bounds)
+    else:
+        assert isinstance(points, dict)
+        backend = _perform_event(
+            "patrol_reward_dismiss",
+            points["reward_dismiss"],
+            args,
+            bounds,
+            kind="dismiss",
+        )
     print(f"{label}: clicked reward-dismiss once via {backend}", flush=True)
     # 旧的冗余第二次点击保留作校准记录；如日后弹窗行为变化，可据此恢复。
-    # backend = perform_click(*points["reward_dismiss"], backend_name, bounds)
+    # backend = _perform_event("patrol_reward_dismiss", points["reward_dismiss"], args, bounds, kind="dismiss")
     # print(f"{label}: clicked reward-dismiss 2/2 via {backend}", flush=True)
     return backend
 
@@ -114,50 +136,35 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             )
         return 0
 
-    backend = perform_click(*points["patrol_truck"], args.backend, bounds)
+    backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
     set_phase_state(args, "patrol_opened")
     print(f"patrol full: clicked patrol truck via {backend}", flush=True)
-    sleep_between(BUSINESS_WAITS["patrol_truck"])
-
-    backend = perform_reward_click(*points["patrol_claim"], args.backend, bounds)
+    backend = _perform_event("patrol_claim", points["patrol_claim"], args, bounds, kind="reward")
     print(f"patrol full: clicked patrol claim via {backend}", flush=True)
-    sleep_between(BUSINESS_WAITS["patrol_claim"])
-    backend = dismiss_reward_once(points, args.backend, bounds, label="patrol full claim")
-    sleep_between(BUSINESS_WAITS["quick_patrol_between"])
+    backend = dismiss_reward_once(args, points, bounds, label="patrol full claim")
 
     for idx in range(args.quick_times):
-        backend = perform_reward_click(*points["quick_patrol"], args.backend, bounds)
+        backend = _perform_event("quick_patrol_reward", points["quick_patrol"], args, bounds, kind="reward")
         print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
-        sleep_between(BUSINESS_WAITS["quick_patrol_reward"])
         backend = dismiss_reward_once(
+            args,
             points,
-            args.backend,
             bounds,
             label=f"patrol full quick {idx + 1}/{args.quick_times}",
         )
-        if idx + 1 < args.quick_times:
-            sleep_between(BUSINESS_WAITS["quick_patrol_between"])
-
-    sleep_between(BUSINESS_WAITS["patrol_ad_between"])
     for idx in range(args.ad_times):
-        backend = perform_click(*points["quick_patrol"], args.backend, bounds)
+        backend = _perform_event("patrol_ad_start", points["quick_patrol"], args, bounds)
         print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
-        sleep_between(BUSINESS_WAITS["patrol_ad_start"])
-        backend = perform_click(*points["ad_close_top"], args.backend, bounds)
+        backend = _perform_event("patrol_ad_close", points["ad_close_top"], args, bounds)
         print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
-        sleep_between(BUSINESS_WAITS["patrol_ad_close"])
         ensure_game_ready_after_ad(bounds)
         backend = dismiss_reward_once(
+            args,
             points,
-            args.backend,
             bounds,
             label=f"patrol full ad {idx + 1}/{args.ad_times}",
         )
-        if idx + 1 < args.ad_times:
-            sleep_between(BUSINESS_WAITS["patrol_ad_between"])
-
-    sleep_between(BUSINESS_WAITS["patrol_close"])
-    backend = perform_click(*points["patrol_close"], args.backend, bounds)
+    backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(
         "patrol full complete: "
         f"attempted claim, quick={args.quick_times}, ads={args.ad_times}; "
@@ -183,9 +190,8 @@ def command_patrol_ads_from_home(args: argparse.Namespace) -> int:
             f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
-    backend = perform_click(*points["patrol_truck"], args.backend, bounds)
+    backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
     print(f"patrol ad from-home: clicked patrol truck via {backend}", flush=True)
-    sleep_between(BUSINESS_WAITS["patrol_truck"])
     backend = run_repeated_click_flow(
         points=points,
         bounds=bounds,
@@ -198,7 +204,7 @@ def command_patrol_ads_from_home(args: argparse.Namespace) -> int:
             ("reward_dismiss", "patrol ad {index}/{count}: clicked reward-dismiss via {backend}", 0),
         ),
     )
-    backend = perform_click(*points["patrol_close"], args.backend, bounds)
+    backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(f"patrol ad from-home complete: attempted {args.times}; clicked close via {backend}")
     return 0
 

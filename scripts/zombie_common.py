@@ -39,11 +39,11 @@ MIN_HEIGHT = 760
 ASPECT_MIN = 0.43
 ASPECT_MAX = 0.68
 # Keep a short randomized pause between helper clicks.
-POST_CLICK_WAIT_MIN = 0.4
-POST_CLICK_WAIT_MAX = 0.6
+POST_CLICK_WAIT_MIN = 0.8
+POST_CLICK_WAIT_MAX = 1.0
 TAB_POST_CLICK_EXTRA_SECONDS = 0.5
 MIN_WAIT_SECONDS = 0.5
-REWARD_POST_ACTION_MIN_SECONDS = 1.55
+REWARD_POST_ACTION_MIN_SECONDS = 1.85
 DISMISS_POST_ACTION_MIN_SECONDS = 0.2
 CLICK_HOLD_SECONDS = 0.08
 CLICK_HOLD_MILLISECONDS = 80
@@ -647,7 +647,7 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
 
 def log_operation(kind: str, status: str, details: str) -> None:
     """Write an auditable result for one physical input operation."""
-    # print(f"operation: {kind} status={status} {details}", flush=True)
+    print(f"operation: {kind} status={status} {details}", flush=True)
 
 
 def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
@@ -848,11 +848,17 @@ def perform_action(
     backend: str,
     expected_bounds: Bounds,
     business_waits: Dict[str, float] | None = None,
+    kind: str | None = None,
+    pre_wait_seconds: float | None = None,
 ) -> str:
     """Deliver a named action and its one configured business wait."""
-    if action_name in REWARD_ACTION_NAMES:
+    if pre_wait_seconds is not None:
+        sleep_between(pre_wait_seconds)
+    if kind == "dismiss":
+        result = perform_dismiss_click(x, y, backend, expected_bounds)
+    elif kind == "reward" or action_name in REWARD_ACTION_NAMES:
         result = perform_reward_click(x, y, backend, expected_bounds)
-    elif action_name in BOTTOM_TAB_ACTION_NAMES:
+    elif kind == "tab" or action_name in BOTTOM_TAB_ACTION_NAMES:
         result = perform_tab_click(x, y, backend, expected_bounds)
     else:
         result = perform_click(x, y, backend, expected_bounds)
