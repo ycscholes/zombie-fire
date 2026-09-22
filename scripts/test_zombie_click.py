@@ -39,6 +39,22 @@ class BaseTrainingHallTests(unittest.TestCase):
         args = zombie_click.build_parser().parse_args(["base-training-hall"])
         self.assertEqual(args.battle_times, 5)
 
+    def test_core_trial_has_a_half_second_business_wait(self) -> None:
+        self.assertEqual(zombie_click._base.BUSINESS_WAITS["core_trial"], 0.5)
+
+    def test_core_trial_routes_through_its_module_business_waits(self) -> None:
+        args = argparse.Namespace(backend="cgclick")
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        with patch.object(zombie_click._base, "perform_action", return_value="cgclick") as action:
+            self.assertEqual(
+                zombie_click._base._click_action(args, {"core_trial": (10, 20)}, "core_trial", bounds),
+                "cgclick",
+            )
+
+        action.assert_called_once_with(
+            "core_trial", 10, 20, "cgclick", bounds, zombie_click._base.BUSINESS_WAITS
+        )
+
     def test_battlefield_contest_targets_bottom_list_row(self) -> None:
         self.assertEqual((zombie_click.ACTIONS["battle_modal_drag_start"].x, zombie_click.ACTIONS["battle_modal_drag_start"].y), (250, 580))
         self.assertEqual((zombie_click.ACTIONS["battle_modal_drag_end"].x, zombie_click.ACTIONS["battle_modal_drag_end"].y), (250, 330))

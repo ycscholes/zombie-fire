@@ -7,6 +7,7 @@ from ..zombie_actions import *
 
 BUSINESS_WAITS = {
     "global_rescue_challenge": 1.0,
+    "core_trial": 0.5,
 }
 
 
