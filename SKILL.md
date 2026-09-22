@@ -34,6 +34,7 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legi
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-shop-purchases
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-shop
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py shop-training-hall
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py journey-purifier-recruit
 ```
 
 The helper maps the normal `508x949` Computer Use coordinate space to the
@@ -350,6 +351,16 @@ unexpected state.
   first confirmed popup.
 - For `净化者`, click `净化者` -> `招募`, then re-capture after map movement.
   Count only explicit recruit/free reward results.
+
+### Purifier Recruit
+
+`journey-purifier-recruit` is the free-only purifier subtask. It enters
+Journey, opens 净化者, clicks the confirmed-free 招募 button, drags the map to
+the calibrated six-recruit layout, then claims the six head-top reward buttons
+in order and dismisses the reward popup after each claim. The combined
+`daily-rewards` Journey phase runs the existing gold/wood collection first and
+then this subtask. Stop instead of running it if 招募 or any displayed reward is
+not explicitly free.
 
 ## Shop
 

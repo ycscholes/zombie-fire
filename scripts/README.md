@@ -9,6 +9,10 @@ The daily workflow has eight phases; `--from-step 7` starts at base training
 hall and `--from-step 8` starts at shop training hall. Use the repository
 unittest command from the root for verification.
 
+`journey-purifier-recruit` is the standalone free-only purifier task. It is
+also included in the Journey phase of `daily-rewards`, after the gold and wood
+resource claims.
+
 `base-training-hall` runs the base route in order: cafeteria claim, Global
 Rescue free reward, Terminal Crisis free sweep, then the existing Battlefield
 Contest and Element Trial tasks. It returns to the base page when complete.

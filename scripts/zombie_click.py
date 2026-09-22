@@ -32,6 +32,8 @@ _TASK_HANDLERS = {
     "command_calendar_claim": _home.command_calendar_claim,
     "command_mail_claim": _home.command_mail_claim,
     "command_welfare_claim": _home.command_welfare_claim,
+    "command_journey_daily_rewards": _journey.command_journey_daily_rewards,
+    "command_journey_purifier_recruit": _journey.command_journey_purifier_recruit,
     "command_journey_resource_claim": _journey.command_journey_resource_claim,
     "command_legion_daily_rewards": _legion.command_legion_daily_rewards,
     "command_legion_reward_claims": _legion.command_legion_reward_claims,
@@ -71,6 +73,9 @@ def _sync_task_compat(module: object) -> None:
                 setattr(module, name, globals()[name])
     if module is _legion:
         module.command_legion_reward_claims = globals()["command_legion_reward_claims"]
+    if module is _journey:
+        module.command_journey_resource_claim = globals()["command_journey_resource_claim"]
+        module.command_journey_purifier_recruit = globals()["command_journey_purifier_recruit"]
     for name in (
         "front_window_snapshot", "classify_snapshot", "get_bounds", "prepare_command_bounds",
         "fit_game_window",
@@ -135,6 +140,8 @@ def command_daily_rewards(args): return _task_call(_daily, "command_daily_reward
 def command_calendar_claim(args): return _task_call(_home, "command_calendar_claim", args)
 def command_mail_claim(args): return _task_call(_home, "command_mail_claim", args)
 def command_welfare_claim(args): return _task_call(_home, "command_welfare_claim", args)
+def command_journey_daily_rewards(args): return _task_call(_journey, "command_journey_daily_rewards", args)
+def command_journey_purifier_recruit(args): return _task_call(_journey, "command_journey_purifier_recruit", args)
 def command_journey_resource_claim(args): return _task_call(_journey, "command_journey_resource_claim", args)
 def command_legion_daily_rewards(args): return _task_call(_legion, "command_legion_daily_rewards", args)
 def command_legion_reward_claims(args): return _task_call(_legion, "command_legion_reward_claims", args)
@@ -494,6 +501,14 @@ def build_parser() -> argparse.ArgumentParser:
     journey_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     journey_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     journey_parser.set_defaults(func=command_journey_resource_claim)
+
+    purifier_parser = sub.add_parser(
+        "journey-purifier-recruit",
+        help="open Journey and claim all six free purifier recruiter rewards",
+    )
+    purifier_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    purifier_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    purifier_parser.set_defaults(func=command_journey_purifier_recruit)
 
     base_parser = sub.add_parser(
         "base-training-hall",

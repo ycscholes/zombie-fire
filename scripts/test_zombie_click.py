@@ -484,6 +484,75 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 229)
         self.assertEqual(zombie_click.ACTIONS["journey_wood_claim"].x, 229)
 
+    def test_journey_purifier_recruit_claims_six_rewards_in_order(self) -> None:
+        args = zombie_click.build_parser().parse_args(["journey-purifier-recruit"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        events: list[tuple[str, str]] = []
+        with (
+            patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
+            patch.object(
+                zombie_click,
+                "perform_action",
+                side_effect=lambda name, *_: (events.append(("action", name)), "cgclick")[1],
+            ),
+            patch.object(
+                zombie_click,
+                "perform_drag",
+                side_effect=lambda *_: events.append(("drag", "journey_purifier_drag")),
+            ),
+            patch.object(
+                zombie_click,
+                "perform_reward_click",
+                side_effect=lambda x, y, *_: (events.append(("reward", next(
+                    name for name in tuple(f"journey_purifier_claim_{index}" for index in range(1, 7))
+                    if zombie_click.scale_point(zombie_click.ACTIONS[name], bounds) == (x, y)
+                ))), "cgclick")[1],
+            ),
+            patch.object(
+                zombie_click,
+                "perform_dismiss_click",
+                side_effect=lambda *_: (events.append(("dismiss", "reward_dismiss")), "cgclick")[1],
+            ),
+        ):
+            self.assertEqual(zombie_click.command_journey_purifier_recruit(args), 0)
+
+        self.assertEqual(
+            events,
+            [
+                ("action", "journey_tab"),
+                ("action", "journey_purifier_entry"),
+                ("action", "journey_purifier_recruit"),
+                ("drag", "journey_purifier_drag"),
+                *((kind, f"journey_purifier_claim_{index}" if kind == "reward" else "reward_dismiss")
+                  for index in range(1, 7) for kind in ("reward", "dismiss")),
+            ],
+        )
+
+    def test_journey_daily_rewards_runs_resources_then_purifier(self) -> None:
+        args = zombie_click.build_parser().parse_args(["journey-resource-claim"])
+        calls: list[str] = []
+        with (
+            patch.object(zombie_click, "command_journey_resource_claim", side_effect=lambda _: (calls.append("resources"), 0)[1]),
+            patch.object(zombie_click, "command_journey_purifier_recruit", side_effect=lambda _: (calls.append("purifier"), 0)[1]),
+        ):
+            self.assertEqual(zombie_click.command_journey_daily_rewards(args), 0)
+        self.assertEqual(calls, ["resources", "purifier"])
+
+    def test_journey_purifier_dry_run_sends_no_input(self) -> None:
+        with (
+            patch.object(zombie_click, "perform_action") as action,
+            patch.object(zombie_click, "perform_drag") as drag,
+            patch.object(zombie_click, "perform_reward_click") as reward,
+            patch.object(zombie_click, "perform_dismiss_click") as dismiss,
+        ):
+            self.assertEqual(zombie_click.main([
+                "--mock-bounds", "2,33,508,949", "journey-purifier-recruit", "--dry-run",
+            ]), 0)
+        action.assert_not_called()
+        drag.assert_not_called()
+        reward.assert_not_called()
+        dismiss.assert_not_called()
+
     def test_cgclick_emits_a_complete_tap_sequence(self) -> None:
         self.assertIn("kCGEventMouseMoved", zombie_click.CGCLICK_SOURCE)
         self.assertIn("kCGMouseEventClickState", zombie_click.CGCLICK_SOURCE)
@@ -1344,7 +1413,7 @@ class FocusEligibilityTests(unittest.TestCase):
             ),
             patch.object(
                 zombie_click,
-                "command_journey_resource_claim",
+                "command_journey_daily_rewards",
                 side_effect=lambda phase_args: phases.append(("journey", phase_args.mock_bounds)),
             ),
             patch.object(
@@ -1391,7 +1460,7 @@ class FocusEligibilityTests(unittest.TestCase):
             ),
             patch.object(
                 zombie_click,
-                "command_journey_resource_claim",
+                "command_journey_daily_rewards",
                 side_effect=lambda _: phases.append("journey"),
             ),
             patch.object(
