@@ -9,7 +9,7 @@ from ..zombie_actions import *
 from .patrol import command_patrol_full_from_home
 from .home import command_calendar_claim, command_welfare_claim, command_mail_claim
 from .legion import command_legion_daily_rewards
-from .journey import command_journey_resource_claim
+from .journey import command_journey_daily_rewards
 from .base import command_base_training_hall
 from .shop import command_shop_training_hall
 
@@ -131,7 +131,7 @@ def command_daily_rewards(args: argparse.Namespace) -> int:
         ("welfare", command_welfare_claim),
         ("mail", command_mail_claim),
         ("legion", command_legion_daily_rewards),
-        ("journey", command_journey_resource_claim),
+        ("journey", command_journey_daily_rewards),
         ("base", command_base_training_hall),
         ("shop", command_shop_training_hall),
     )
