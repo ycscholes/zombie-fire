@@ -504,7 +504,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     purifier_parser = sub.add_parser(
         "journey-purifier-recruit",
-        help="open Journey and claim all six free purifier recruiter rewards",
+        help="open Journey and recruit all available purifiers with one free click",
     )
     purifier_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     purifier_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")

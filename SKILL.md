@@ -355,12 +355,11 @@ unexpected state.
 ### Purifier Recruit
 
 `journey-purifier-recruit` is the free-only purifier subtask. It enters
-Journey, opens 净化者, clicks the confirmed-free 招募 button, drags the map to
-the calibrated six-recruit layout, then claims the six head-top reward buttons
-in order and dismisses the reward popup after each claim. The combined
-`daily-rewards` Journey phase runs the existing gold/wood collection first and
-then this subtask. Stop instead of running it if 招募 or any displayed reward is
-not explicitly free.
+Journey, opens 净化者, and clicks the confirmed-free 招募 button once to recruit
+all available evolvers. It does not drag the window or click individual
+evolver buttons. The combined `daily-rewards` Journey phase runs the existing
+gold/wood collection first and then this subtask. Stop instead of running it if
+招募 is no longer explicitly free.
 
 ## Shop
 

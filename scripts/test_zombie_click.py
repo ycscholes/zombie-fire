@@ -487,7 +487,7 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertEqual(zombie_click.ACTIONS["journey_gold_claim"].x, 229)
         self.assertEqual(zombie_click.ACTIONS["journey_wood_claim"].x, 229)
 
-    def test_journey_purifier_recruit_claims_six_rewards_in_order(self) -> None:
+    def test_journey_purifier_recruit_uses_one_recruit_click_without_drag(self) -> None:
         args = zombie_click.build_parser().parse_args(["journey-purifier-recruit"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         events: list[tuple[str, str]] = []
@@ -498,24 +498,9 @@ class FocusEligibilityTests(unittest.TestCase):
                 "perform_action",
                 side_effect=lambda name, *_: (events.append(("action", name)), "cgclick")[1],
             ),
-            patch.object(
-                zombie_click,
-                "perform_drag",
-                side_effect=lambda *_: events.append(("drag", "journey_purifier_drag")),
-            ),
-            patch.object(
-                zombie_click,
-                "perform_reward_click",
-                side_effect=lambda x, y, *_: (events.append(("reward", next(
-                    name for name in tuple(f"journey_purifier_claim_{index}" for index in range(1, 7))
-                    if zombie_click.scale_point(zombie_click.ACTIONS[name], bounds) == (x, y)
-                ))), "cgclick")[1],
-            ),
-            patch.object(
-                zombie_click,
-                "perform_dismiss_click",
-                side_effect=lambda *_: (events.append(("dismiss", "reward_dismiss")), "cgclick")[1],
-            ),
+            patch.object(zombie_click, "perform_drag") as drag,
+            patch.object(zombie_click, "perform_reward_click") as reward_click,
+            patch.object(zombie_click, "perform_dismiss_click") as dismiss_click,
         ):
             self.assertEqual(zombie_click.command_journey_purifier_recruit(args), 0)
 
@@ -525,11 +510,13 @@ class FocusEligibilityTests(unittest.TestCase):
                 ("action", "journey_tab"),
                 ("action", "journey_purifier_entry"),
                 ("action", "journey_purifier_recruit"),
-                ("drag", "journey_purifier_drag"),
-                *((kind, f"journey_purifier_claim_{index}" if kind == "reward" else "reward_dismiss")
-                  for index in range(1, 7) for kind in ("reward", "dismiss")),
             ],
         )
+        drag.assert_not_called()
+        reward_click.assert_not_called()
+        dismiss_click.assert_not_called()
+        self.assertEqual(zombie_click.ACTIONS["journey_purifier_recruit"].x, 254)
+        self.assertEqual(zombie_click.ACTIONS["journey_purifier_recruit"].y, 716)
 
     def test_journey_daily_rewards_runs_resources_then_purifier(self) -> None:
         args = zombie_click.build_parser().parse_args(["journey-resource-claim"])

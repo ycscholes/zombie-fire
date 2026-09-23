@@ -7,8 +7,8 @@ from ..zombie_actions import *
 
 BUSINESS_WAITS = {
     "battle_challenge": 1.0,
-    "global_rescue_challenge": 1.0,
     "core_trial": 0.5,
+    "global_rescue_challenge": 1.5,
 }
 
 
@@ -89,8 +89,10 @@ def command_base_training_hall_shop(args: argparse.Namespace) -> int:
     scroll_to_bottom(args, "play_shop_tabs_drag_start", "play_shop_tabs_drag_end")
     perform_click(*points["play_shop_element_tab"], args.backend, bounds)
     _purchase_play_shop_item(args, points, "play_shop_base_material", bounds)
-    perform_click(*points["play_shop_legion_tab"], args.backend, bounds)
-    _purchase_play_shop_item(args, points, "play_shop_skill_manual", bounds)
+    # 暂时不购买legion_tab和skill_manual
+    # perform_click(*points["play_shop_legion_tab"], args.backend, bounds)
+    # _purchase_play_shop_item(args, points, "play_shop_skill_manual", bounds)
+    sleep_between(0.5)
     perform_click(*points["play_shop_close"], args.backend, bounds)
     print("base training hall shop complete: purchased four items and closed shop", flush=True)
     return 0
@@ -133,6 +135,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     _click_action(args, points, "terminal_crisis_sweep", bounds)
     _click_action(args, points, "terminal_crisis_confirm", bounds, reward=True)
     _click_action(args, points, "training_reward_dismiss", bounds, dismiss=True)
+    sleep_between(0.5)
     _click_action(args, points, "training_hall_back", bounds)
     _click_action(args, points, "battle_challenge", bounds)
     _click_action(args, points, "battle_castle", bounds)
@@ -162,6 +165,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     command_base_training_hall_shop(
         argparse.Namespace(mock_bounds=bounds, backend=args.backend, dry_run=False)
     )
+    sleep_between(0.5)
     backend = _click_action(args, points, "training_hall_back", bounds)
     print(
         "base training hall complete: claimed cafeteria, Global Rescue, Terminal Crisis, "

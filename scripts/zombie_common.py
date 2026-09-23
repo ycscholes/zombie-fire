@@ -647,7 +647,7 @@ def click_backend_candidates(backend: str) -> tuple[str, ...]:
 
 def log_operation(kind: str, status: str, details: str) -> None:
     """Write an auditable result for one physical input operation."""
-    print(f"operation: {kind} status={status} {details}", flush=True)
+    # print(f"operation: {kind} status={status} {details}", flush=True)
 
 
 def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
