@@ -6,6 +6,7 @@ from ..zombie_common import *
 from ..zombie_actions import *
 
 BUSINESS_WAITS = {
+    "battle_challenge": 1.0,
     "global_rescue_challenge": 1.0,
     "core_trial": 0.5,
 }

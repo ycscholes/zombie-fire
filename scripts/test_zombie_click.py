@@ -42,6 +42,9 @@ class BaseTrainingHallTests(unittest.TestCase):
     def test_core_trial_has_a_half_second_business_wait(self) -> None:
         self.assertEqual(zombie_click._base.BUSINESS_WAITS["core_trial"], 0.5)
 
+    def test_battle_challenge_has_a_one_second_business_wait(self) -> None:
+        self.assertEqual(zombie_click._base.BUSINESS_WAITS["battle_challenge"], 1.0)
+
     def test_core_trial_routes_through_its_module_business_waits(self) -> None:
         args = argparse.Namespace(backend="cgclick")
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
