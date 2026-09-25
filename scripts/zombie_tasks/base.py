@@ -9,6 +9,8 @@ BUSINESS_WAITS = {
     "battle_challenge": 1.0,
     "core_trial": 0.5,
     "global_rescue_challenge": 1.5,
+    "training_hall": 1.5,
+    "terminal_crisis_confirm": 0.5,
 }
 
 

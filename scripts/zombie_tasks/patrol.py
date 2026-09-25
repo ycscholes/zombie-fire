@@ -7,11 +7,11 @@ from ..zombie_actions import *
 
 BUSINESS_WAITS = {
     "patrol_truck": 0.3,
-    "patrol_claim": 1,
+    "patrol_claim": 1.5,
     "quick_patrol_reward": 0.6,
     "quick_patrol_between": 0.3,
     "patrol_ad_start": 33.0,
-    "patrol_ad_close": 1.5,
+    "patrol_ad_close": 2,
     "patrol_ad_between": 0.5,
     "patrol_reward_dismiss": 0.3,
     "patrol_close": 0.3,
