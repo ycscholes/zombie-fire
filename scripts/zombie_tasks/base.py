@@ -9,7 +9,7 @@ BUSINESS_WAITS = {
     "battle_challenge": 1.0,
     "core_trial": 0.5,
     "global_rescue_challenge": 1.5,
-    "training_hall": 1.5,
+    "training_hall": 2.5,
     "terminal_crisis_confirm": 0.5,
 }
 
@@ -107,7 +107,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
     bounds = prepare_command_bounds(args)
     args.active_bounds = bounds
     names = (
-        "base_tab", "cafeteria", "cafeteria_claim", "cafeteria_back", "training_reward_dismiss",
+        "base_tab", "cafeteria", "cafeteria_claim", "cafeteria_back", "training_reward_dismiss", "battle_reward_dismiss",
         "training_hall", "global_rescue_challenge", "global_rescue_free", "terminal_crisis_challenge",
         "terminal_crisis_sweep", "terminal_crisis_confirm", "battle_challenge", "battle_castle", "battle_modal_challenge",
         "battle_modal_drag_start", "battle_modal_drag_end", "battle_sweep_last", "reward_dismiss", "battle_modal_close",
@@ -148,7 +148,7 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         print("base training hall: battle_modal_scroll_to_bottom (scrolled) via cgclick", flush=True)
     for index in range(args.battle_times):
         _click_action(args, points, "battle_sweep_last", bounds, reward=True)
-        _click_action(args, points, "reward_dismiss", bounds, dismiss=True)
+        _click_action(args, points, "battle_reward_dismiss", bounds, dismiss=True)
         print(f"base training hall: battlefield sweep {index + 1}/{args.battle_times} complete", flush=True)
     _click_action(args, points, "battle_modal_close", bounds)
     _click_action(args, points, "training_hall_back", bounds)

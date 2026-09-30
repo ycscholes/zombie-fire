@@ -46,6 +46,7 @@ ACTIONS: Dict[str, Action] = {
     "cafeteria_claim": Action(254, 912, "cafeteria one-click claim"),
     "cafeteria_back": Action(89, 910, "return from cafeteria to base"),
     "training_reward_dismiss": Action(250, 575, "dismiss training-hall reward popup"),
+    "battle_reward_dismiss": Action(250, 755, "dismiss battle reward popup"),
     "global_rescue_challenge": Action(358, 613, "global rescue challenge"),
     "global_rescue_free": Action(82, 277, "global rescue free reward"),
     "terminal_crisis_challenge": Action(323, 339, "terminal crisis challenge"),
