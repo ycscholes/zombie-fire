@@ -15,8 +15,18 @@ claiming recruiter buttons. It is also included in the Journey phase of
 `daily-rewards`, after the gold and wood resource claims.
 
 `base-training-hall` runs the base route in order: cafeteria claim, Global
-Rescue free reward, Terminal Crisis free sweep, then the existing Battlefield
-Contest and Element Trial tasks. It returns to the base page when complete.
+Rescue free reward, Deep Abyss challenge/fail plus two sweeps, Terminal Crisis
+free sweep, then the existing Battlefield Contest and Element Trial tasks. It
+returns to the base page when complete.
+`base-training-hall-deep-abyss` runs only the Deep Abyss subtask; start it from
+the training-hall list page. It returns to the training hall when complete.
+`base-training-hall-global-rescue`, `base-training-hall-terminal-crisis`,
+`base-training-hall-battlefield-contest`, and
+`base-training-hall-element-trial` run those routes independently. Each starts
+from the open training-hall list and returns there. Battlefield Contest accepts
+`--battle-times` (default `5`). These commands reuse the composite route's
+actions; Terminal Crisis, Battlefield Contest, and Element Trial scroll to the
+bottom when needed. They do not replenish attempts or add purchase/ad actions.
 `base-training-hall-shop` starts from the already-open training hall and runs
 the four requested play-shop purchases.
 

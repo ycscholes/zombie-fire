@@ -27,6 +27,11 @@ from scripts.zombie_tasks import shop as _shop
 _TASK_MODULES = (_base, _daily, _home, _journey, _legion, _patrol, _shop)
 _TASK_HANDLERS = {
     "command_base_training_hall": _base.command_base_training_hall,
+    "command_base_training_hall_deep_abyss": _base.command_base_training_hall_deep_abyss,
+    "command_base_training_hall_global_rescue": _base.command_base_training_hall_global_rescue,
+    "command_base_training_hall_terminal_crisis": _base.command_base_training_hall_terminal_crisis,
+    "command_base_training_hall_battlefield_contest": _base.command_base_training_hall_battlefield_contest,
+    "command_base_training_hall_element_trial": _base.command_base_training_hall_element_trial,
     "command_base_training_hall_shop": _base.command_base_training_hall_shop,
     "command_daily_rewards": _daily.command_daily_rewards,
     "command_calendar_claim": _home.command_calendar_claim,
@@ -38,6 +43,7 @@ _TASK_HANDLERS = {
     "command_legion_daily_rewards": _legion.command_legion_daily_rewards,
     "command_legion_reward_claims": _legion.command_legion_reward_claims,
     "command_legion_sweep_batch": _legion.command_legion_sweep_batch,
+    "command_legion_journey_gifts": _legion.command_legion_journey_gifts,
     "command_legion_shop_purchases": _legion.command_legion_shop_purchases,
     "command_patrol_ads_batch": _patrol.command_patrol_ads_batch,
     "command_patrol_ads_from_home": _patrol.command_patrol_ads_from_home,
@@ -135,6 +141,11 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
 
 
 def command_base_training_hall(args): return _task_call(_base, "command_base_training_hall", args)
+def command_base_training_hall_deep_abyss(args): return _task_call(_base, "command_base_training_hall_deep_abyss", args)
+def command_base_training_hall_global_rescue(args): return _task_call(_base, "command_base_training_hall_global_rescue", args)
+def command_base_training_hall_terminal_crisis(args): return _task_call(_base, "command_base_training_hall_terminal_crisis", args)
+def command_base_training_hall_battlefield_contest(args): return _task_call(_base, "command_base_training_hall_battlefield_contest", args)
+def command_base_training_hall_element_trial(args): return _task_call(_base, "command_base_training_hall_element_trial", args)
 def command_base_training_hall_shop(args): return _task_call(_base, "command_base_training_hall_shop", args)
 def command_daily_rewards(args): return _task_call(_daily, "command_daily_rewards", args)
 def command_calendar_claim(args): return _task_call(_home, "command_calendar_claim", args)
@@ -146,6 +157,7 @@ def command_journey_resource_claim(args): return _task_call(_journey, "command_j
 def command_legion_daily_rewards(args): return _task_call(_legion, "command_legion_daily_rewards", args)
 def command_legion_reward_claims(args): return _task_call(_legion, "command_legion_reward_claims", args)
 def command_legion_sweep_batch(args): return _task_call(_legion, "command_legion_sweep_batch", args)
+def command_legion_journey_gifts(args): return _task_call(_legion, "command_legion_journey_gifts", args)
 def command_legion_shop_purchases(args): return _task_call(_legion, "command_legion_shop_purchases", args)
 def command_patrol_ads_batch(args): return _task_call(_patrol, "command_patrol_ads_batch", args)
 def command_patrol_ads_from_home(args): return _task_call(_patrol, "command_patrol_ads_from_home", args)
@@ -512,13 +524,54 @@ def build_parser() -> argparse.ArgumentParser:
 
     base_parser = sub.add_parser(
         "base-training-hall",
-        help="run cafeteria, training-hall rescue/crisis, Battlefield Contest, and Element Trial free routes from the base tab",
+        help="run cafeteria, Global Rescue, Deep Abyss, Terminal Crisis, Battlefield Contest, and Element Trial routes from the base tab",
     )
     base_parser.add_argument("--battle-times", type=int, default=5)
     base_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     base_parser.add_argument("--skip-scroll", action="store_true", help="use after Computer Use has scrolled to the training hall bottom")
     base_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     base_parser.set_defaults(func=command_base_training_hall)
+
+    abyss_parser = sub.add_parser(
+        "base-training-hall-deep-abyss",
+        help="run the Deep Abyss challenge and two sweeps from the training-hall list",
+    )
+    abyss_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    abyss_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    abyss_parser.set_defaults(func=command_base_training_hall_deep_abyss)
+
+    global_rescue_parser = sub.add_parser(
+        "base-training-hall-global-rescue",
+        help="claim the Global Rescue free reward from the training-hall list",
+    )
+    global_rescue_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    global_rescue_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    global_rescue_parser.set_defaults(func=command_base_training_hall_global_rescue)
+
+    terminal_crisis_parser = sub.add_parser(
+        "base-training-hall-terminal-crisis",
+        help="run the Terminal Crisis free sweep from the training-hall list",
+    )
+    terminal_crisis_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    terminal_crisis_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    terminal_crisis_parser.set_defaults(func=command_base_training_hall_terminal_crisis)
+
+    battlefield_contest_parser = sub.add_parser(
+        "base-training-hall-battlefield-contest",
+        help="run Battlefield Contest sweeps from the training-hall list",
+    )
+    battlefield_contest_parser.add_argument("--battle-times", type=int, default=5)
+    battlefield_contest_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    battlefield_contest_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    battlefield_contest_parser.set_defaults(func=command_base_training_hall_battlefield_contest)
+
+    element_trial_parser = sub.add_parser(
+        "base-training-hall-element-trial",
+        help="claim Element Trial idle reward and run one Core Trial ten-time sweep",
+    )
+    element_trial_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    element_trial_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    element_trial_parser.set_defaults(func=command_base_training_hall_element_trial)
 
     base_shop_parser = sub.add_parser(
         "base-training-hall-shop",
@@ -592,6 +645,11 @@ def build_parser() -> argparse.ArgumentParser:
     legion_sweep_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_sweep_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_sweep_parser.set_defaults(func=command_legion_sweep_batch)
+
+    legion_gifts_parser = sub.add_parser("legion-journey-gifts", help="claim expedition gifts and perform three 40-energy search sweeps")
+    legion_gifts_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    legion_gifts_parser.add_argument("--dry-run", action="store_true")
+    legion_gifts_parser.set_defaults(func=command_legion_journey_gifts)
 
     legion_shop_parser = sub.add_parser(
         "legion-shop-purchases",

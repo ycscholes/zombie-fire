@@ -32,6 +32,12 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mo
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-reward-claims
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-daily-rewards
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-shop-purchases
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-journey-gifts
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-deep-abyss
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-global-rescue
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-terminal-crisis
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-battlefield-contest --battle-times 5
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-element-trial
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-shop
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py shop-training-hall
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py journey-purifier-recruit
@@ -60,7 +66,9 @@ is represented as `Action(358,513)` and delivered to CoreGraphics at
 Use `dry-run click <action>` to inspect both values before a live click.
 
 Every helper click waits a random `0.8` to `1.0` seconds before the next helper
-operation. Do not bypass this pacing when adding new scripted click flows.
+operation, except the Deep Abyss challenge reward dismissal before `abyss_pause`,
+which waits `0.5` seconds. Do not bypass this pacing when adding new scripted
+click flows.
 Reward-popup dismiss clicks do not add a fixed post-dismiss wait; any needed
 transition delay must come from the surrounding business wait.
 
@@ -277,6 +285,12 @@ defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
 
 ## Legion
 
+**Ordering invariant for future changes:** `legion-journey-gifts` must remain
+the final task inside the legion module. It returns from the Journey map to
+the legion tab as its final action, so later legion work would change the
+module's final page. Keep it after every other legion action, including shop
+work, and update this sequence if the route changes.
+
 For the complete verified free-reward route, first use Computer Use to confirm
 the daily-cut button is direct-free and the foreign challenge has two free
 sweeps available, then run:
@@ -319,6 +333,25 @@ attempt -> `异域挑战` sweep -> visible reward rows.
    sub-flow. Do not spend repeated screenshots trying alternative points in the
    same daily run.
 
+### Legion Expedition Gifts Subtask
+
+`legion-journey-gifts` is appended after the legion shop subtask. It opens the
+legion hub's 征途 entry (not the bottom Journey tab), waits 0.5 seconds, opens
+军团礼物, waits 0.5 seconds, claims the first gift and dismisses the reward.
+It then clicks 前往, waits 2 seconds, opens 扫荡, performs exactly three
+sweep/dismiss cycles, closes the search dialog, clicks the red-boxed 基地
+building entry on the Journey map (not the bottom 基地 tab), then clicks the
+bottom legion tab to finish on the legion page. Wait 1 second after clicking
+the map base entry. Normal randomized click pacing remains in addition to
+these business waits. Run only after confirming
+direct gift claims and enough energy for three sweeps.
+
+The sweep costs 40 Journey energy per attempt (120 for three), with no diamond
+purchase or ad. This user-authorized energy use is allowed for this subtask;
+verify at least 120 energy before running. Never buy energy or confirm a
+currency offer when energy is insufficient. Button coordinates were calibrated
+on 2026-10-01; the map base entry was calibrated on 2026-10-02.
+
 ### Legion Shop Purchase Subtask
 
 Use `legion-shop-purchases` when starting from the legion hub. It opens the
@@ -338,6 +371,41 @@ quantity, dismisses each reward popup and closes each purchase modal, then
 closes the play shop. It uses the battlefield bottom drag and the horizontal
 tab-strip drag before entering the requested tabs. Only run it after verifying
 the four visible purchase actions are direct-cost and safe.
+
+### Deep Abyss Subtask
+
+`base-training-hall` runs the Deep Abyss route immediately after the Global
+Rescue reward is dismissed. It enters 深渊挑战, waits 0.5 seconds, starts the
+challenge, waits 3 seconds, dismisses the startup
+information prompts, pauses and exits to the failure result, returns and waits
+2 seconds, then performs two sweep/reward-dismiss cycles. The Deep Abyss page's
+back button returns to the main game, so the route selects 基地 again before
+continuing the training-hall sequence.
+
+This route attempts one challenge and two sweeps, which consume three Deep
+Abyss challenge attempts. It does not inspect or replenish the count and never
+clicks the adjacent `+` button.
+
+Run `base-training-hall-deep-abyss` independently when already on the training-
+hall list page. It executes the same Deep Abyss sequence and returns to the
+training hall when finished.
+
+### Training Hall Standalone Tasks
+
+Use these commands when already on the open training-hall list page:
+
+- `base-training-hall-global-rescue` claims the Global Rescue free reward.
+- `base-training-hall-terminal-crisis` runs the existing free sweep.
+- `base-training-hall-battlefield-contest` runs the existing sweep route five
+  times by default; pass `--battle-times N` to change the count.
+- `base-training-hall-element-trial` claims the visible idle reward and runs
+  one existing ten-time Core Trial sweep.
+
+Each command returns to the training-hall list. They reuse the existing
+composite-route actions and waits. Terminal Crisis scrolls the list to the
+bottom; Battlefield Contest and Element Trial do the same before entering
+their routes. They do not replenish attempts or add purchase, ad, or ambiguous
+actions. Use `--dry-run` to print planned points without clicking.
 
 ## Journey
 

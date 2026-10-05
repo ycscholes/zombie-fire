@@ -56,6 +56,54 @@ def command_legion_shop_purchases(args: argparse.Namespace) -> int:
     print("legion shop purchases complete: purchased three items and closed shop", flush=True)
     return 0
 
+JOURNEY_GIFT_ACTIONS = (
+    "legion_journey_entry", "legion_journey_gifts", "legion_journey_claim_first",
+    "legion_journey_reward_dismiss", "legion_journey_go", "legion_journey_sweep_tab",
+    "legion_journey_sweep", "legion_journey_search_close",
+    "legion_journey_base_entry", "legion_tab",
+)
+JOURNEY_GIFT_WAITS = {
+    "legion_journey_entry": 0.5,
+    "legion_journey_gifts": 0.5,
+    "legion_journey_go": 2.0,
+    "legion_journey_base_entry": 1.0,
+}
+
+
+def command_legion_journey_gifts(args: argparse.Namespace) -> int:
+    """Claim the first expedition gift and attempt exactly three search sweeps."""
+    bounds = prepare_command_bounds(args)
+    points = scaled_points(bounds, *JOURNEY_GIFT_ACTIONS)
+    steps = [
+        "legion_journey_entry", "legion_journey_gifts", "legion_journey_claim_first",
+        "legion_journey_reward_dismiss", "legion_journey_go", "legion_journey_sweep_tab",
+    ] + ["legion_journey_sweep", "legion_journey_reward_dismiss"] * 3 + [
+        "legion_journey_search_close", "legion_journey_base_entry", "legion_tab",
+    ]
+    if args.dry_run:
+        print(f"legion journey gifts dry-run: steps={steps}, event_waits={JOURNEY_GIFT_WAITS}, points={points}")
+        return 0
+    for action in steps:
+        click = (perform_tab_click if action == "legion_tab"
+                 else perform_dismiss_click if action == "legion_journey_reward_dismiss"
+                 else perform_reward_click if action in {"legion_journey_claim_first", "legion_journey_sweep"}
+                 else perform_click)
+        backend = click(*points[action], args.backend, bounds)
+        if action == "legion_journey_go":
+            set_phase_state(args, "legion_journey_search_opened")
+        elif action == "legion_journey_search_close":
+            set_phase_state(args, "legion_journey_search_closed")
+        elif action == "legion_journey_base_entry":
+            set_phase_state(args, "legion_journey_base_opened")
+        elif action == "legion_tab":
+            set_phase_state(args, "legion_journey_complete")
+        print(f"legion journey gifts: {action} via {backend}", flush=True)
+        if action in JOURNEY_GIFT_WAITS:
+            sleep_between(JOURNEY_GIFT_WAITS[action])
+    print("legion journey gifts complete: attempted first gift and three sweeps; clicked map base then returned to legion tab", flush=True)
+    return 0
+
+
 def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     """Run the verified daily-cut, foreign-sweep, and legion-reward sequence."""
     if args.sweep_times < 1:
@@ -82,6 +130,7 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
                 sweep_times=args.sweep_times,
             )
         )
+        command_legion_journey_gifts(argparse.Namespace(mock_bounds=bounds, backend=args.backend, dry_run=True))
         return 0
 
     backend = perform_tab_click(*points["legion_tab"], args.backend, bounds)
@@ -114,7 +163,12 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
             phase_progress=getattr(args, "phase_progress", None),
         )
     )
-    print("legion daily rewards complete: attempted daily cut, foreign-challenge rewards, and shop purchases")
+    gift_args = argparse.Namespace(mock_bounds=bounds, backend=args.backend, dry_run=False,
+                                   phase_progress=getattr(args, "phase_progress", None))
+    # Keep this as the final legion task: it visits the Journey map base entry
+    # and returns to the legion tab, so later legion work changes the final page.
+    command_legion_journey_gifts(gift_args)
+    print("legion daily rewards complete: attempted daily cut, foreign-challenge rewards, shop purchases, and expedition gifts/sweeps")
     return 0
 def command_legion_reward_claims(args: argparse.Namespace) -> int:
     if args.sweep_times < 1:

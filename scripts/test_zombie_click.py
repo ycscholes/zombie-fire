@@ -19,6 +19,19 @@ sys.modules[SPEC.name] = zombie_click
 SPEC.loader.exec_module(zombie_click)
 
 
+class LegionJourneyGiftsTests(unittest.TestCase):
+    def test_route_waits_and_three_sweeps(self):
+        args = zombie_click.build_parser().parse_args(["legion-journey-gifts"])
+        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
+        names = zombie_click._legion.JOURNEY_GIFT_ACTIONS
+        fixture = {name: zombie_click.Action(20 + i, 100 + i, "test fixture") for i, name in enumerate(names)}
+        events = []
+        with patch.dict(zombie_click.ACTIONS, fixture), patch.object(zombie_click, "prepare_command_bounds", return_value=bounds), patch.object(zombie_click, "perform_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_tab_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_reward_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "sleep_between", side_effect=lambda value: events.append(("wait", value))):
+            self.assertEqual(zombie_click.command_legion_journey_gifts(args), 0)
+            point = lambda name: zombie_click.scale_point(fixture[name], bounds)
+            self.assertEqual(events, [point(names[0]), ("wait", .5), point(names[1]), ("wait", .5), point(names[2]), point(names[3]), point(names[4]), ("wait", 2.0), point(names[5])] + [point(names[6]), point(names[3])] * 3 + [point(names[7]), point("legion_journey_base_entry"), ("wait", 1.0), point("legion_tab")])
+
+
 class BaseTrainingHallTests(unittest.TestCase):
     def test_task_compat_does_not_replace_base_scroll_with_entry_wrapper(self) -> None:
         original = zombie_click._base.scroll_to_bottom
@@ -1067,6 +1080,7 @@ class FocusEligibilityTests(unittest.TestCase):
             patch.object(zombie_click, "sleep_between"),
             patch.object(zombie_click, "command_legion_reward_claims", return_value=0) as claims,
             patch.object(zombie_click._legion, "command_legion_shop_purchases", return_value=0) as shop,
+            patch.object(zombie_click._legion, "command_legion_journey_gifts", return_value=0) as gifts,
         ):
             self.assertEqual(zombie_click.command_legion_daily_rewards(args), 0)
 
@@ -1085,6 +1099,8 @@ class FocusEligibilityTests(unittest.TestCase):
         self.assertIs(delegated.mock_bounds, bounds)
         self.assertEqual(delegated.sweep_times, args.sweep_times)
         self.assertFalse(hasattr(delegated, "confirm_wait"))
+        gifts.assert_called_once()
+        self.assertIs(gifts.call_args.args[0].mock_bounds, bounds)
         shop.assert_called_once()
         self.assertIs(shop.call_args.args[0].mock_bounds, bounds)
 
