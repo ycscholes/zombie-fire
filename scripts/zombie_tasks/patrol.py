@@ -1,9 +1,10 @@
-"""Patrol tab workflows."""
+"""巡逻收益、普通快速巡逻与广告巡逻任务。"""
 
 from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
+from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix, task_entry_page
 
 BUSINESS_WAITS = {
     "patrol_truck": 0.3,
@@ -26,9 +27,11 @@ def _perform_event(
     *,
     kind: str | None = None,
 ) -> str:
+    """巡逻步骤：按照对应业务等待时间执行普通点击、领奖或关闭弹窗。"""
     return perform_action(event, *point, args.backend, bounds, BUSINESS_WAITS, kind=kind)
 
 def command_patrol_ads_batch(args: argparse.Namespace) -> int:
+    """广告巡逻：从已打开的巡逻页按指定次数观看广告并关闭奖励弹窗。"""
     if args.times < 1:
         raise ClickError("--times must be >= 1")
     bounds = prepare_command_bounds(args)
@@ -54,6 +57,7 @@ def command_patrol_ads_batch(args: argparse.Namespace) -> int:
     print(f"patrol ad batch complete: attempted {args.times} via {backend}")
     return 0
 def patrol_full_points(bounds: Bounds) -> Dict[str, Tuple[int, int]]:
+    """巡逻坐标：按当前窗口尺寸换算领取收益、快速巡逻和广告关闭等点击位置。"""
     return scaled_points(
         bounds,
         "patrol_truck",
@@ -73,6 +77,7 @@ def dismiss_reward_once(
     label: str,
 ) -> str:
     # 奖励弹窗关闭后不再补点同一坐标，避免第二击落到已恢复的游戏页面。
+    """巡逻奖励：只点击一次关闭弹窗，避免重复点击落到后方游戏页面。"""
     if isinstance(args, dict):
         backend = perform_dismiss_click(*args["reward_dismiss"], str(points), bounds)
     else:
@@ -92,6 +97,14 @@ def dismiss_reward_once(
 
 
 def command_patrol_full_from_home(args: argparse.Namespace) -> int:
+    """完整巡逻：从首页领取巡逻收益，执行指定次数的普通和广告快速巡逻后关闭页面。"""
+    selection = select_task_suffix(
+        LOCAL_TASK_IDS["patrol-full-from-home"],
+        getattr(args, "from_task", None),
+        "patrol-full-from-home",
+    )
+    if not (args.dry_run and getattr(args, "json", False)):
+        print_task_selection("patrol-full-from-home", selection, dry_run=args.dry_run)
     if args.quick_times < 0:
         raise ClickError("--quick-times must be >= 0")
     if args.ad_times < 0:
@@ -120,6 +133,13 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
     if args.dry_run:
         plan = {
             "command": "patrol-full-from-home",
+            "tasks": selection.remaining,
+            "skipped_tasks": selection.skipped,
+            "entry_page": (
+                task_entry_page("patrol-full-from-home", selection.selected)
+                if selection.explicit_start
+                else None
+            ),
             "quick_times": args.quick_times,
             "ad_times": args.ad_times,
             "fit": args.fit and not bool(args.mock_bounds),
@@ -131,48 +151,57 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
         else:
             print(
                 "patrol full from-home dry-run: "
+                f"tasks={selection.remaining}, skipped={selection.skipped}, "
                 f"quick_times={args.quick_times}, ad_times={args.ad_times}, "
                 f"fit={plan['fit']}, event_waits={plan['event_waits']}, points={points}"
             )
         return 0
 
-    backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
-    set_phase_state(args, "patrol_opened")
-    print(f"patrol full: clicked patrol truck via {backend}", flush=True)
-    backend = _perform_event("patrol_claim", points["patrol_claim"], args, bounds, kind="reward")
-    print(f"patrol full: clicked patrol claim via {backend}", flush=True)
-    backend = dismiss_reward_once(args, points, bounds, label="patrol full claim")
+    tasks = set(selection.remaining)
+    if "claim" in tasks:
+        backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
+        set_phase_state(args, "patrol_opened")
+        print(f"patrol full: clicked patrol truck via {backend}", flush=True)
+        backend = _perform_event("patrol_claim", points["patrol_claim"], args, bounds, kind="reward")
+        print(f"patrol full: clicked patrol claim via {backend}", flush=True)
+        backend = dismiss_reward_once(args, points, bounds, label="patrol full claim")
+    elif tasks:
+        # A resumed quick/ad task starts with the patrol panel already open.
+        set_phase_state(args, "patrol_opened")
 
-    for idx in range(args.quick_times):
-        backend = _perform_event("quick_patrol_reward", points["quick_patrol"], args, bounds, kind="reward")
-        print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
-        backend = dismiss_reward_once(
-            args,
-            points,
-            bounds,
-            label=f"patrol full quick {idx + 1}/{args.quick_times}",
-        )
-    for idx in range(args.ad_times):
-        backend = _perform_event("patrol_ad_start", points["quick_patrol"], args, bounds)
-        print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
-        backend = _perform_event("patrol_ad_close", points["ad_close_top"], args, bounds)
-        print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
-        ensure_game_ready_after_ad(bounds)
-        backend = dismiss_reward_once(
-            args,
-            points,
-            bounds,
-            label=f"patrol full ad {idx + 1}/{args.ad_times}",
-        )
+    if "quick_patrol" in tasks:
+        for idx in range(args.quick_times):
+            backend = _perform_event("quick_patrol_reward", points["quick_patrol"], args, bounds, kind="reward")
+            print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
+            backend = dismiss_reward_once(
+                args,
+                points,
+                bounds,
+                label=f"patrol full quick {idx + 1}/{args.quick_times}",
+            )
+    if "ad_patrol" in tasks:
+        for idx in range(args.ad_times):
+            backend = _perform_event("patrol_ad_start", points["quick_patrol"], args, bounds)
+            print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
+            backend = _perform_event("patrol_ad_close", points["ad_close_top"], args, bounds)
+            print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
+            ensure_game_ready_after_ad(bounds)
+            backend = dismiss_reward_once(
+                args,
+                points,
+                bounds,
+                label=f"patrol full ad {idx + 1}/{args.ad_times}",
+            )
     backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(
-        "patrol full complete: "
-        f"attempted claim, quick={args.quick_times}, ads={args.ad_times}; "
+        f"patrol full complete: attempted {selection.remaining}; "
+        f"quick={args.quick_times}, ads={args.ad_times}; "
         f"clicked close via {backend}"
     )
     return 0
 
 def command_patrol_ads_from_home(args: argparse.Namespace) -> int:
+    """首页广告巡逻：打开巡逻页，按指定次数观看广告领取奖励后关闭页面。"""
     if args.times < 1:
         raise ClickError("--times must be >= 1")
     bounds = prepare_command_bounds(args)
@@ -192,24 +221,18 @@ def command_patrol_ads_from_home(args: argparse.Namespace) -> int:
         return 0
     backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
     print(f"patrol ad from-home: clicked patrol truck via {backend}", flush=True)
-    backend = run_repeated_click_flow(
-        points=points,
-        bounds=bounds,
-        backend_name=args.backend,
-        count=args.times,
-        between=BUSINESS_WAITS["patrol_ad_between"],
-        steps=(
-            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", BUSINESS_WAITS["patrol_ad_start"]),
-            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", BUSINESS_WAITS["patrol_ad_close"]),
-            ("reward_dismiss", "patrol ad {index}/{count}: clicked reward-dismiss via {backend}", 0),
-        ),
-    )
+    batch_args = argparse.Namespace(**vars(args))
+    batch_args.mock_bounds = bounds
+    batch_args.fit = False
+    batch_args.from_task = None
+    command_patrol_ads_batch(batch_args)
     backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(f"patrol ad from-home complete: attempted {args.times}; clicked close via {backend}")
     return 0
 
 
 def command_patrol_quick_batch(args: argparse.Namespace) -> int:
+    """普通快速巡逻：从已打开的巡逻页按指定次数领取奖励并关闭弹窗。"""
     if args.times < 1:
         raise ClickError("--times must be >= 1")
     bounds = prepare_command_bounds(args)

@@ -1,4 +1,4 @@
-"""Home tab workflows: mail, calendar, and welfare."""
+"""首页邮件、日历与福利任务。"""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ BUSINESS_WAITS = {
 }
 
 def command_mail_claim(args: argparse.Namespace) -> int:
+    """邮件：打开右上角菜单，一键领取邮件奖励后关闭邮件和菜单。"""
     bounds = prepare_command_bounds(args)
     points = scaled_points(
         bounds,
@@ -48,7 +49,7 @@ def command_mail_claim(args: argparse.Namespace) -> int:
     print(f"mail claim complete: dismissed menu via {backend}")
     return 0
 def command_calendar_claim(args: argparse.Namespace) -> int:
-    """Claim the calendar's visible free gift and return to the home page."""
+    """日历：领取当前可见的免费礼包后返回首页。"""
     bounds = prepare_command_bounds(args)
     points = scaled_points(
         bounds,
@@ -76,7 +77,7 @@ def command_calendar_claim(args: argparse.Namespace) -> int:
     return 0
 
 def command_welfare_claim(args: argparse.Namespace) -> int:
-    """Claim the automatic free welfare popup and return without visiting recharge tabs."""
+    """福利：拖动右侧菜单进入福利页，关闭自动免费奖励弹窗后返回。"""
     bounds = prepare_command_bounds(args)
     points = scaled_points(
         bounds,

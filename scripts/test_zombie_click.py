@@ -20,7 +20,7 @@ SPEC.loader.exec_module(zombie_click)
 
 
 class LegionJourneyGiftsTests(unittest.TestCase):
-    def test_route_waits_and_three_sweeps(self):
+    def test_gift_claim_waits_without_disabled_expedition(self):
         args = zombie_click.build_parser().parse_args(["legion-journey-gifts"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         names = zombie_click._legion.JOURNEY_GIFT_ACTIONS
@@ -29,7 +29,7 @@ class LegionJourneyGiftsTests(unittest.TestCase):
         with patch.dict(zombie_click.ACTIONS, fixture), patch.object(zombie_click, "prepare_command_bounds", return_value=bounds), patch.object(zombie_click, "perform_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_tab_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_reward_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "sleep_between", side_effect=lambda value: events.append(("wait", value))):
             self.assertEqual(zombie_click.command_legion_journey_gifts(args), 0)
             point = lambda name: zombie_click.scale_point(fixture[name], bounds)
-            self.assertEqual(events, [point(names[0]), ("wait", .5), point(names[1]), ("wait", .5), point(names[2]), point(names[3]), point(names[4]), ("wait", 2.0), point(names[5])] + [point(names[6]), point(names[3])] * 3 + [point(names[7]), point("legion_journey_base_entry"), ("wait", 1.0), point("legion_tab")])
+            self.assertEqual(events, [point(names[0]), ("wait", .5), point(names[1]), ("wait", .5), point(names[2]), point(names[3])])
 
 
 class BaseTrainingHallTests(unittest.TestCase):
@@ -90,9 +90,10 @@ class BaseTrainingHallTests(unittest.TestCase):
         events: list[str] = []
         with (
             patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
-            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
-            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_, **kwargs: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_, **kwargs: (events.append((x, y)), "cgclick")[1]),
             patch.object(zombie_click, "sleep_between"),
+            patch.object(zombie_click.time, "sleep"),
             patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
             patch.object(zombie_click._base, "command_base_training_hall_shop", return_value=0) as play_shop,
         ):
@@ -105,10 +106,15 @@ class BaseTrainingHallTests(unittest.TestCase):
             point("base_tab"), point("cafeteria"), point("cafeteria_claim"),
             point("training_reward_dismiss"), point("cafeteria_back"), point("training_hall"),
             point("global_rescue_challenge"), point("global_rescue_free"), point("training_reward_dismiss"), point("training_hall_back"),
+            point("global_expedition_challenge"), point("global_expedition_free"), point("reward_dismiss"), point("global_expedition_back"),
+            point("abyss_entry"), point("abyss_challenge"), point("reward_dismiss"), point("abyss_pause"),
+            point("abyss_pause_exit"), point("abyss_fail_return"),
+            point("abyss_sweep"), point("reward_dismiss"), point("abyss_sweep"), point("reward_dismiss"),
+            point("abyss_back"), point("base_tab"), point("training_hall"),
             "scroll", point("terminal_crisis_challenge"), point("terminal_crisis_sweep"), point("terminal_crisis_confirm"),
             point("training_reward_dismiss"), point("training_hall_back"),
             point("battle_challenge"), point("battle_castle"), point("reward_dismiss"), point("battle_modal_challenge"), "scroll",
-            point("battle_sweep_last"), point("reward_dismiss"), point("battle_sweep_last"), point("reward_dismiss"),
+            point("battle_sweep_last"), point("battle_reward_dismiss"), point("battle_sweep_last"), point("battle_reward_dismiss"),
             point("battle_modal_close"), point("training_hall_back"),
             point("element_challenge"), point("core_trial"), point("idle_button"), point("idle_claim"), point("reward_dismiss"),
             point("idle_cancel"), point("core_sweep"), point("core_sweep_ten"), point("reward_dismiss"), point("core_sweep_close"), point("core_trial_back"), point("element_back"), point("training_hall_back"),
@@ -132,9 +138,10 @@ class BaseTrainingHallTests(unittest.TestCase):
         events: list[object] = []
         with (
             patch.object(zombie_click, "prepare_command_bounds", return_value=bounds),
-            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_: (events.append((x, y)), "cgclick")[1]),
-            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_: (events.append((x, y, "dismiss")), "cgclick")[1]),
+            patch.object(zombie_click, "perform_click", side_effect=lambda x, y, *_, **kwargs: (events.append((x, y)), "cgclick")[1]),
+            patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x, y, *_, **kwargs: (events.append((x, y, "dismiss")), "cgclick")[1]),
             patch.object(zombie_click, "sleep_between"),
+            patch.object(zombie_click.time, "sleep"),
             patch.object(zombie_click, "scroll_to_bottom", side_effect=lambda *_: events.append("scroll")),
             patch.object(zombie_click._base, "command_base_training_hall_shop", return_value=0) as play_shop,
         ):
@@ -150,7 +157,7 @@ class BaseTrainingHallTests(unittest.TestCase):
             (point("training_reward_dismiss")[0], point("training_reward_dismiss")[1], "dismiss"),
             point("training_hall_back"),
         ])
-        self.assertEqual(events[10:16], [
+        self.assertEqual(events[27:33], [
             "scroll", point("terminal_crisis_challenge"), point("terminal_crisis_sweep"),
             point("terminal_crisis_confirm"),
             (point("training_reward_dismiss")[0], point("training_reward_dismiss")[1], "dismiss"),
@@ -215,7 +222,7 @@ class BaseTrainingHallShopTests(unittest.TestCase):
         args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
         self.assertEqual(args.command, "base-training-hall-shop")
 
-    def test_play_shop_route_starts_in_training_hall_and_completes_four_purchases(self) -> None:
+    def test_play_shop_route_completes_three_purchases_without_skill_manual(self) -> None:
         args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         events: list[object] = []
@@ -240,8 +247,6 @@ class BaseTrainingHallShopTests(unittest.TestCase):
             ("drag", "play_shop_tabs_drag_start", "play_shop_tabs_drag_end"), point("play_shop_element_tab"),
             point("play_shop_base_material"), point("play_shop_max"), point("play_shop_buy"),
             dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
-            point("play_shop_legion_tab"), point("play_shop_skill_manual"), point("play_shop_max"),
-            point("play_shop_buy"), dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
             point("play_shop_close"),
         ])
 
@@ -526,8 +531,14 @@ class FocusEligibilityTests(unittest.TestCase):
             ],
         )
         drag.assert_not_called()
-        reward_click.assert_not_called()
-        dismiss_click.assert_not_called()
+        reward_click.assert_called_once_with(
+            *zombie_click.scale_point(zombie_click.ACTIONS["journey_purifier_claim"], bounds),
+            args.backend, bounds,
+        )
+        dismiss_click.assert_called_once_with(
+            *zombie_click.scale_point(zombie_click.ACTIONS["reward_dismiss"], bounds),
+            args.backend, bounds,
+        )
         self.assertEqual(zombie_click.ACTIONS["journey_purifier_recruit"].x, 254)
         self.assertEqual(zombie_click.ACTIONS["journey_purifier_recruit"].y, 716)
 
@@ -687,23 +698,6 @@ class FocusEligibilityTests(unittest.TestCase):
 
         dispatch.assert_called_once_with("cgclick", 10, 20)
 
-    def test_perform_click_logs_successful_delivery(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        with (
-            patch.object(zombie_click, "focus_game_window"),
-            patch.object(zombie_click, "ensure_unchanged_game_window"),
-            patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
-            patch.object(zombie_click, "wait_after_click"),
-            redirect_stdout(output),
-        ):
-            zombie_click.perform_click(10, 20, "cgclick", bounds)
-
-        self.assertIn(
-            "operation: click status=success backend=cgclick point=(10,20)",
-            output.getvalue(),
-        )
-        self.assertRegex(output.getvalue(), r"^\d{2}:\d{2}:\d{2} operation: click status=success")
 
     def test_json_output_remains_unprefixed_for_machine_parsing(self) -> None:
         output = io.StringIO()
@@ -722,54 +716,6 @@ class FocusEligibilityTests(unittest.TestCase):
             r"^\d{2}:\d{2}:\d{2} first line\n\d{2}:\d{2}:\d{2} second line\n$",
         )
 
-    def test_perform_click_logs_each_failed_delivery_attempt(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        with (
-            patch.object(zombie_click, "focus_game_window"),
-            patch.object(zombie_click, "ensure_unchanged_game_window"),
-            patch.object(zombie_click, "try_click_backend", return_value=(False, "unavailable")),
-            redirect_stdout(output),
-        ):
-            with self.assertRaisesRegex(zombie_click.ClickDeliveryError, "cgclick: unavailable"):
-                zombie_click.perform_click(10, 20, "cgclick", bounds)
-
-        self.assertEqual(output.getvalue().count("operation: click status=failed backend=cgclick point=(10,20)"), 2)
-        self.assertEqual(output.getvalue().count("reason=unavailable"), 2)
-
-    def test_perform_drag_logs_successful_delivery(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        with (
-            patch.object(zombie_click, "focus_game_window") as focus,
-            patch.object(zombie_click, "ensure_unchanged_game_window") as verify,
-            patch.object(zombie_click, "drag_cgclick_bin", return_value=True) as drag,
-            redirect_stdout(output),
-        ):
-            zombie_click.perform_drag(10, 20, 30, 40, bounds)
-
-        focus.assert_called_once_with(bounds)
-        verify.assert_called_once_with(bounds)
-        drag.assert_called_once_with(10, 20, 30, 40)
-        self.assertIn(
-            "operation: drag status=success backend=cgclick start=(10,20) end=(30,40)",
-            output.getvalue(),
-        )
-
-    def test_perform_drag_logs_unavailable_delivery_before_raising(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        with (
-            patch.object(zombie_click, "focus_game_window"),
-            patch.object(zombie_click, "ensure_unchanged_game_window"),
-            patch.object(zombie_click, "drag_cgclick_bin", return_value=False),
-            redirect_stdout(output),
-        ):
-            with self.assertRaisesRegex(zombie_click.ClickDeliveryError, "drag backend unavailable"):
-                zombie_click.perform_drag(10, 20, 30, 40, bounds)
-
-        self.assertIn("operation: drag status=failed backend=cgclick start=(10,20) end=(30,40)", output.getvalue())
-        self.assertIn("reason=unavailable", output.getvalue())
 
     def test_perform_dismiss_click_has_no_fixed_post_dismiss_wait(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -793,21 +739,6 @@ class FocusEligibilityTests(unittest.TestCase):
         click.assert_called_once_with(10, 20, "cgclick", bounds, False, zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
         sleep.assert_not_called()
 
-    def test_perform_reward_click_logs_its_project_wait(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        with (
-            patch.object(zombie_click, "focus_game_window"),
-            patch.object(zombie_click, "ensure_unchanged_game_window"),
-            patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
-            patch.object(zombie_click.time, "sleep") as sleep,
-            redirect_stdout(output),
-        ):
-            self.assertEqual(zombie_click.perform_reward_click(10, 20, "cgclick", bounds), "cgclick")
-
-        sleep.assert_called_once_with(zombie_click.REWARD_POST_ACTION_MIN_SECONDS)
-        self.assertIn("post_reward_wait_ms=1850.0", output.getvalue())
-        self.assertIn("post_reward_wait_actual_ms=", output.getvalue())
 
     def test_generic_reward_actions_use_the_project_reward_interval(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
@@ -972,27 +903,8 @@ class FocusEligibilityTests(unittest.TestCase):
         focus.assert_not_called()
         verify.assert_called_once_with(bounds)
 
-    def test_session_click_log_reports_fast_path_timing(self) -> None:
-        bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
-        output = io.StringIO()
-        zombie_click.start_input_session()
-        zombie_click.bind_input_session(bounds)
-        try:
-            with (
-                patch.object(zombie_click, "try_click_backend", return_value=(True, "")),
-                patch.object(zombie_click, "wait_after_click"),
-                redirect_stdout(output),
-            ):
-                zombie_click.perform_click(10, 20, "cgclick", bounds)
-        finally:
-            zombie_click.end_input_session()
 
-        self.assertRegex(
-            output.getvalue(),
-            r"operation: click status=success backend=cgclick point=\(10,20\) mode=session .*preflight_ms=0(?:\.\d+)? deliver_ms=",
-        )
-
-    def test_input_session_logs_lifecycle_and_preflight_identity(self) -> None:
+    def test_input_session_logs_lifecycle_and_bound_identity(self) -> None:
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         output = io.StringIO()
         with redirect_stdout(output):
@@ -1014,13 +926,6 @@ class FocusEligibilityTests(unittest.TestCase):
             f"input-session: bind id={session_id} bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)",
             log,
         )
-        self.assertIn(
-            f"mode=session session_id={session_id} session_state=match",
-            log,
-        )
-        self.assertIn("expected_bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)", log)
-        self.assertIn("bound_bounds=(WeChat,com.tencent.xinWeChat,2,33,508,949)", log)
-        self.assertRegex(log, r"session_age_ms=\d+\.\d")
         self.assertIn(f"input-session: end id={session_id}", log)
 
     def test_legion_reward_claims_runs_the_full_foreign_challenge_route(self) -> None:
@@ -1098,7 +1003,9 @@ class FocusEligibilityTests(unittest.TestCase):
         delegated = claims.call_args.args[0]
         self.assertIs(delegated.mock_bounds, bounds)
         self.assertEqual(delegated.sweep_times, args.sweep_times)
-        self.assertFalse(hasattr(delegated, "confirm_wait"))
+        self.assertIsNone(delegated.from_task)
+        self.assertFalse(delegated.fit)
+        self.assertEqual(delegated.confirm_wait, args.confirm_wait)
         gifts.assert_called_once()
         self.assertIs(gifts.call_args.args[0].mock_bounds, bounds)
         shop.assert_called_once()

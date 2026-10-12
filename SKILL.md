@@ -35,6 +35,7 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legi
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py legion-journey-gifts
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-deep-abyss
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-global-rescue
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-global-expedition
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-terminal-crisis
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-battlefield-contest --battle-times 5
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py base-training-hall-element-trial
@@ -237,6 +238,49 @@ focus and calibration before the selected phase. It never infers prior progress
 or resumes a phase-internal click; choose a phase only after returning to its
 known safe boundary.
 
+For a business-task boundary, use `--from-task ID`. The daily command accepts:
+
+| IDs | Put the game on this task's entry page first |
+| --- | --- |
+| `patrol.claim` | Home; this task opens the patrol panel |
+| `patrol.quick_patrol`, `patrol.ad_patrol` | Patrol panel |
+| `calendar`, `welfare`, `mail` | Home |
+| `legion.daily_cut`, `legion.foreign_rewards` | Home; these tasks open the Legion page |
+| `legion.shop_purchases`, `legion.journey_gifts` | Legion page |
+| `journey.resources`, `journey.purifier` | Home |
+| `base.cafeteria` | Base page |
+| `base.global_rescue`, `base.global_expedition`, `base.deep_abyss`, `base.terminal_crisis`, `base.play_shop` | Training-hall list; `base.play_shop` opens the shop as part of its task |
+| `base.battlefield_contest`, `base.element_trial` | Training-hall list; the command scrolls to the bottom before the task unless `--skip-scroll` is set, in which case the list must already be at the bottom |
+| `shop.resource_gold` | Home |
+| `shop.special_pack_gold` | Special-pack shop page |
+
+For example, `daily-rewards --from-task legion.shop_purchases` starts at the
+Legion shop task, then continues with Legion journey gifts and every later
+daily phase. The summary reports skipped IDs and the remaining task suffix.
+`--from-step` and `--from-task` are mutually exclusive. CLI help lists the
+entry page for every accepted ID. A resume plan, including `--dry-run`, prints
+the selected ID's required entry page without clicking or dragging.
+
+The independently runnable composite commands also accept local IDs:
+
+| Command | IDs and required entry pages |
+| --- | --- |
+| `patrol-full-from-home` | `claim`=home; `quick_patrol`, `ad_patrol`=patrol panel |
+| `legion-daily-rewards` | `daily_cut`, `foreign_rewards`=home; `shop`, `journey_gifts`=Legion page |
+| `journey-daily-rewards` | `resources`, `purifier`=home |
+| `base-training-hall` | `cafeteria`=Base page; `global_rescue`, `global_expedition`, `deep_abyss`, `terminal_crisis`, `play_shop`=training-hall list; `battlefield_contest`, `element_trial`=training-hall list (auto-scrolls to bottom unless `--skip-scroll`, which requires the list at bottom) |
+| `shop-training-hall` | `resource_gold`=home; `special_pack_gold`=special-pack shop page |
+| `legion-reward-claims` | `sweeps`=home; `legion_rewards`=foreign-challenge page; `personal_rewards`=Legion rewards panel |
+| `legion-shop-purchases` | `gun_blueprint`, `base_powder`, `enhancer`=Legion shop list scrolled to the selected item |
+| `legion-journey-gifts` | `gift_claim`=Legion page; `expedition`=Journey gift page |
+| `base-training-hall-shop` | `base_powder`=play shop enhancer item; `gun_blueprint`=battle tab at the item; `base_materials`=element tab at the item |
+
+For example, use `legion-daily-rewards --from-task shop` or
+`base-training-hall --from-task element_trial`. A selected repeated batch starts
+at its first iteration and uses its configured count; it does not resume inside
+the batch. Earlier tasks are skipped without checking whether they succeeded.
+The play-shop `skill_manual` purchase remains disabled, so it has no resume ID.
+
 One failed click delivery is retried once after re-focusing the calibrated game
 window. If delivery still fails after a known phase entry, the helper uses only
 that phase's verified close/back path, records `recovered_failure`, and
@@ -338,8 +382,8 @@ attempt -> `异域挑战` sweep -> visible reward rows.
 `legion-journey-gifts` is appended after the legion shop subtask. It opens the
 legion hub's 征途 entry (not the bottom Journey tab), waits 0.5 seconds, opens
 军团礼物, waits 0.5 seconds, claims the first gift and dismisses the reward.
-It then clicks 前往, waits 2 seconds, opens 扫荡, performs exactly three
-sweep/dismiss cycles, closes the search dialog, clicks the red-boxed 基地
+The 前往 click is temporarily commented out. The route then opens 扫荡,
+performs exactly three sweep/dismiss cycles, closes the search dialog, clicks the red-boxed 基地
 building entry on the Journey map (not the bottom 基地 tab), then clicks the
 bottom legion tab to finish on the legion page. Wait 1 second after clicking
 the map base entry. Normal randomized click pacing remains in addition to
@@ -366,16 +410,24 @@ visible and safe.
 ### Training Hall Play-Shop Purchase Subtask
 
 Use `base-training-hall-shop` when already on the training hall page. It opens
-玩法商店, purchases 基地熔粉, 枪械图纸, 基建耗材, and 随机技能手册 at maximum
-quantity, dismisses each reward popup and closes each purchase modal, then
-closes the play shop. It uses the battlefield bottom drag and the horizontal
-tab-strip drag before entering the requested tabs. Only run it after verifying
-the four visible purchase actions are direct-cost and safe.
+玩法商店 and purchases the enabled 基地熔粉, 枪械图纸, and 基建耗材 entries at
+maximum quantity, dismisses each reward popup and closes each purchase modal,
+then closes the play shop. The 随机技能手册 entry remains disabled. The route
+uses the battlefield bottom drag and horizontal tab-strip drag before entering
+the requested tabs. Only run it after verifying the visible purchase actions
+are direct-cost and safe.
+
+### Global Expedition Subtask
+
+`base-training-hall` runs this after Global Rescue. It opens the 寰球远征 card,
+claims the left-side 免费 reward, dismisses the popup, then exits the event page
+and selects 基地 → 历练大厅 to return to the training-hall list. Run
+`base-training-hall-global-expedition` independently from that list page.
 
 ### Deep Abyss Subtask
 
-`base-training-hall` runs the Deep Abyss route immediately after the Global
-Rescue reward is dismissed. It enters 深渊挑战, waits 0.5 seconds, starts the
+`base-training-hall` runs the Deep Abyss route after the Global Expedition
+reward is dismissed. It enters 深渊挑战, waits 0.5 seconds, starts the
 challenge, waits 3 seconds, dismisses the startup
 information prompts, pauses and exits to the failure result, returns and waits
 2 seconds, then performs two sweep/reward-dismiss cycles. The Deep Abyss page's
@@ -395,6 +447,8 @@ training hall when finished.
 Use these commands when already on the open training-hall list page:
 
 - `base-training-hall-global-rescue` claims the Global Rescue free reward.
+- `base-training-hall-global-expedition` enters Global Expedition, claims its
+  left-side free reward, dismisses the popup, and returns to the training hall.
 - `base-training-hall-terminal-crisis` runs the existing free sweep.
 - `base-training-hall-battlefield-contest` runs the existing sweep route five
   times by default; pass `--battle-times N` to change the count.

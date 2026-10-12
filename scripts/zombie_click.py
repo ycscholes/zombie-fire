@@ -21,6 +21,7 @@ from scripts.zombie_tasks import home as _home
 from scripts.zombie_tasks import journey as _journey
 from scripts.zombie_tasks import legion as _legion
 from scripts.zombie_tasks import patrol as _patrol
+from scripts.zombie_tasks.resume import DAILY_TASK_IDS, LOCAL_TASK_IDS, task_entry_help
 from scripts.zombie_tasks import shop as _shop
 
 
@@ -29,6 +30,7 @@ _TASK_HANDLERS = {
     "command_base_training_hall": _base.command_base_training_hall,
     "command_base_training_hall_deep_abyss": _base.command_base_training_hall_deep_abyss,
     "command_base_training_hall_global_rescue": _base.command_base_training_hall_global_rescue,
+    "command_base_training_hall_global_expedition": _base.command_base_training_hall_global_expedition,
     "command_base_training_hall_terminal_crisis": _base.command_base_training_hall_terminal_crisis,
     "command_base_training_hall_battlefield_contest": _base.command_base_training_hall_battlefield_contest,
     "command_base_training_hall_element_trial": _base.command_base_training_hall_element_trial,
@@ -140,30 +142,65 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
             setattr(_common, dependency, value)
 
 
+# 基地每日任务：领取食堂奖励，依次执行训练大厅各挑战和玩法商店购买。
 def command_base_training_hall(args): return _task_call(_base, "command_base_training_hall", args)
+# 从已打开的训练大厅列表单独执行深渊挑战子任务。
 def command_base_training_hall_deep_abyss(args): return _task_call(_base, "command_base_training_hall_deep_abyss", args)
+# 从已打开的训练大厅列表单独执行寰球救援子任务。
 def command_base_training_hall_global_rescue(args): return _task_call(_base, "command_base_training_hall_global_rescue", args)
+# 从已打开的训练大厅列表单独执行寰球远征子任务。
+def command_base_training_hall_global_expedition(args): return _task_call(_base, "command_base_training_hall_global_expedition", args)
+# 从已打开的训练大厅列表单独执行终末危机子任务。
 def command_base_training_hall_terminal_crisis(args): return _task_call(_base, "command_base_training_hall_terminal_crisis", args)
+# 从已打开的训练大厅列表单独执行战场争霸，扫荡次数由 battle_times 指定。
 def command_base_training_hall_battlefield_contest(args): return _task_call(_base, "command_base_training_hall_battlefield_contest", args)
+# 从已打开的训练大厅列表单独执行元素试炼子任务。
 def command_base_training_hall_element_trial(args): return _task_call(_base, "command_base_training_hall_element_trial", args)
+# 玩法商店：从训练大厅进入，购买强化剂、枪械图纸和基建耗材后关闭商店。
 def command_base_training_hall_shop(args): return _task_call(_base, "command_base_training_hall_shop", args)
+# 每日奖励总任务：在同一游戏窗口内依次执行八个阶段，支持从指定阶段继续。
 def command_daily_rewards(args): return _task_call(_daily, "command_daily_rewards", args)
+# 日历：领取当前可见的免费礼包后返回首页。
 def command_calendar_claim(args): return _task_call(_home, "command_calendar_claim", args)
+# 邮件：打开右上角菜单，一键领取邮件奖励后关闭邮件和菜单。
 def command_mail_claim(args): return _task_call(_home, "command_mail_claim", args)
+# 福利：拖动右侧菜单进入福利页，关闭自动免费奖励弹窗后返回。
 def command_welfare_claim(args): return _task_call(_home, "command_welfare_claim", args)
+# 征途每日任务：依次领取资源和执行净化者招募。
 def command_journey_daily_rewards(args): return _task_call(_journey, "command_journey_daily_rewards", args)
+# 净化者招募：进入征途招募页面，执行一键招募并领取奖励。
 def command_journey_purifier_recruit(args): return _task_call(_journey, "command_journey_purifier_recruit", args)
+# 征途资源：进入征途，分别领取金币和木材并关闭奖励弹窗。
 def command_journey_resource_claim(args): return _task_call(_journey, "command_journey_resource_claim", args)
+# 军团每日任务：依次执行每日一刀、异域挑战领奖、商店购买和征途赠礼。
 def command_legion_daily_rewards(args): return _task_call(_legion, "command_legion_daily_rewards", args)
+# 军团领奖：按指定次数扫荡异域挑战，再领取军团和个人奖励。
 def command_legion_reward_claims(args): return _task_call(_legion, "command_legion_reward_claims", args)
+# 军团批量扫荡：从已打开的挑战页重复扫荡、确认并关闭奖励弹窗。
 def command_legion_sweep_batch(args): return _task_call(_legion, "command_legion_sweep_batch", args)
+# 军团征途：领取首个赠礼并尝试三次搜索扫荡，经地图基地返回军团页。
 def command_legion_journey_gifts(args): return _task_call(_legion, "command_legion_journey_gifts", args)
+# 军团商店：滚动到底部，依次购买枪械图纸、基建粉末和强化剂后关闭商店。
 def command_legion_shop_purchases(args): return _task_call(_legion, "command_legion_shop_purchases", args)
+# 广告巡逻：从已打开的巡逻页按指定次数观看广告并关闭奖励弹窗。
 def command_patrol_ads_batch(args): return _task_call(_patrol, "command_patrol_ads_batch", args)
+# 首页广告巡逻：打开巡逻页，按指定次数观看广告领取奖励后关闭页面。
 def command_patrol_ads_from_home(args): return _task_call(_patrol, "command_patrol_ads_from_home", args)
+# 完整巡逻：从首页领取巡逻收益，执行指定次数的普通和广告快速巡逻后关闭页面。
 def command_patrol_full_from_home(args): return _task_call(_patrol, "command_patrol_full_from_home", args)
+# 普通快速巡逻：从已打开的巡逻页按指定次数领取奖励并关闭弹窗。
 def command_patrol_quick_batch(args): return _task_call(_patrol, "command_patrol_quick_batch", args)
+# 商城免费奖励：领取资源页和特惠礼包页的免费金币。
 def command_shop_training_hall(args): return _task_call(_shop, "command_shop_training_hall", args)
+
+
+def _add_from_task_argument(parser: argparse.ArgumentParser, scope: str) -> None:
+    parser.add_argument(
+        "--from-task",
+        choices=LOCAL_TASK_IDS[scope],
+        metavar="TASK",
+        help=f"resume at TASK and continue; required entry pages by ID: {task_entry_help(scope)}",
+    )
 
 
 def _common_call(name, *args, **kwargs):
@@ -209,16 +246,19 @@ def click_cgclick_bin(*args, **kwargs): return _common_call("click_cgclick_bin",
 def click_quartz(*args, **kwargs): return _common_call("click_quartz", *args, **kwargs)
 def click_cliclick(*args, **kwargs): return _common_call("click_cliclick", *args, **kwargs)
 def scroll_to_bottom(*args, **kwargs):
+    """基地列表：按校准坐标向上拖动；指定跳过滚动时直接返回。"""
     _sync_task_compat(_base)
     return _base.scroll_to_bottom(*args, **kwargs)
 
 
 def dismiss_reward_once(*args, **kwargs):
+    """巡逻奖励：只点击一次关闭弹窗，避免重复点击落到后方游戏页面。"""
     _sync_task_compat(_patrol)
     return _patrol.dismiss_reward_once(*args, **kwargs)
 
 
 def recover_phase(*args, **kwargs):
+    """阶段恢复：根据已记录的页面状态，尝试退出失败阶段到已知安全位置。"""
     _sync_task_compat(_daily)
     return _daily.recover_phase(*args, **kwargs)
 
@@ -237,6 +277,7 @@ def print_json(data: object, as_json: bool) -> None:
 
 
 def command_list(args: argparse.Namespace) -> int:
+    """列出所有已校准动作的名称、坐标和说明。"""
     rows = [
         {"name": name, "x": action.x, "y": action.y, "description": action.desc}
         for name, action in sorted(ACTIONS.items())
@@ -250,6 +291,7 @@ def command_list(args: argparse.Namespace) -> int:
 
 
 def command_state(args: argparse.Namespace) -> int:
+    """读取当前前台窗口并输出游戏就绪状态。"""
     snapshot = front_window_snapshot()
     snapshot["status"] = classify_snapshot(snapshot)
     snapshot["aspect"] = round(int(snapshot["width"]) / int(snapshot["height"]), 4)
@@ -265,6 +307,7 @@ def command_state(args: argparse.Namespace) -> int:
 
 
 def command_bounds(args: argparse.Namespace) -> int:
+    """读取并校验游戏窗口位置和尺寸，按参数选择是否调整窗口。"""
     bounds = get_bounds(args)
     if args.fit and not args.mock_bounds:
         bounds = fit_game_window()
@@ -290,6 +333,7 @@ def command_bounds(args: argparse.Namespace) -> int:
 
 
 def command_fit_window(args: argparse.Namespace) -> int:
+    """将游戏窗口调整到校准尺寸并输出最终位置。"""
     bounds = fit_game_window()
     validate_bounds(bounds, allow_mock=False)
     if args.json:
@@ -323,6 +367,7 @@ def resolve_action(name: str) -> Action:
 
 
 def command_dry_run(args: argparse.Namespace) -> int:
+    """动作预演：输出指定动作的基准坐标和屏幕坐标，不执行点击。"""
     action = resolve_action(args.name)
     bounds = get_bounds(args)
     validate_bounds(bounds, allow_mock=bool(args.mock_bounds))
@@ -348,6 +393,7 @@ def command_dry_run(args: argparse.Namespace) -> int:
 
 
 def command_click(args: argparse.Namespace) -> int:
+    """单次动作：校验窗口并执行指定动作。"""
     action = resolve_action(args.name)
     bounds = prepare_command_bounds(args)
     x, y = scale_point(action, bounds)
@@ -357,6 +403,7 @@ def command_click(args: argparse.Namespace) -> int:
 
 
 def command_seq(args: argparse.Namespace) -> int:
+    """重复动作：按指定次数和间隔执行同一个动作。"""
     if args.times < 1:
         raise ClickError("--times must be >= 1")
     action = resolve_action(args.name)
@@ -372,6 +419,7 @@ def command_seq(args: argparse.Namespace) -> int:
 
 
 def command_self_test(args: argparse.Namespace) -> int:
+    """坐标自检：使用模拟窗口验证坐标缩放结果，不操作游戏。"""
     mock = Bounds("MOCK", "mock", 10, 20, BASE_WIDTH * 2, BASE_HEIGHT * 2)
     point = scale_point(ACTIONS["reward_dismiss"], mock)
     expected = (10 + 500, 20 + 1640)
@@ -447,6 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     patrol_full_parser.add_argument("--ad-between", type=non_negative_float, default=0.5)
     patrol_full_parser.add_argument("--close-wait", type=non_negative_float, default=0.3)
     patrol_full_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
+    _add_from_task_argument(patrol_full_parser, "patrol-full-from-home")
     patrol_full_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     patrol_full_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     patrol_full_parser.set_defaults(func=command_patrol_full_from_home)
@@ -522,13 +571,23 @@ def build_parser() -> argparse.ArgumentParser:
     purifier_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     purifier_parser.set_defaults(func=command_journey_purifier_recruit)
 
+    journey_daily_parser = sub.add_parser(
+        "journey-daily-rewards",
+        help="claim Journey resources, then complete the purifier recruit task",
+    )
+    _add_from_task_argument(journey_daily_parser, "journey-daily-rewards")
+    journey_daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    journey_daily_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    journey_daily_parser.set_defaults(func=command_journey_daily_rewards)
+
     base_parser = sub.add_parser(
         "base-training-hall",
-        help="run cafeteria, Global Rescue, Deep Abyss, Terminal Crisis, Battlefield Contest, and Element Trial routes from the base tab",
+        help="run cafeteria, training-hall challenges, Element Trial, and play-shop purchases",
     )
     base_parser.add_argument("--battle-times", type=int, default=5)
     base_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     base_parser.add_argument("--skip-scroll", action="store_true", help="use after Computer Use has scrolled to the training hall bottom")
+    _add_from_task_argument(base_parser, "base-training-hall")
     base_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     base_parser.set_defaults(func=command_base_training_hall)
 
@@ -547,6 +606,14 @@ def build_parser() -> argparse.ArgumentParser:
     global_rescue_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     global_rescue_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     global_rescue_parser.set_defaults(func=command_base_training_hall_global_rescue)
+
+    global_expedition_parser = sub.add_parser(
+        "base-training-hall-global-expedition",
+        help="claim the Global Expedition free reward from the training-hall list",
+    )
+    global_expedition_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    global_expedition_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
+    global_expedition_parser.set_defaults(func=command_base_training_hall_global_expedition)
 
     terminal_crisis_parser = sub.add_parser(
         "base-training-hall-terminal-crisis",
@@ -575,8 +642,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     base_shop_parser = sub.add_parser(
         "base-training-hall-shop",
-        help="from the training hall, purchase the four play-shop items at maximum quantity",
+        help="from the training hall, purchase the enabled play-shop items at maximum quantity",
     )
+    _add_from_task_argument(base_shop_parser, "base-training-hall-shop")
     base_shop_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     base_shop_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     base_shop_parser.set_defaults(func=command_base_training_hall_shop)
@@ -585,16 +653,18 @@ def build_parser() -> argparse.ArgumentParser:
         "shop-training-hall",
         help="open the shop, claim the free resource gold x600, then claim special-pack gold",
     )
+    _add_from_task_argument(shop_parser, "shop-training-hall")
     shop_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     shop_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     shop_parser.set_defaults(func=command_shop_training_hall)
 
     daily_parser = sub.add_parser(
         "daily-rewards",
-        help="run patrol, calendar, welfare, mail, legion, and Journey daily rewards with one checked game window",
+        help="run all eight daily phases with one checked game window",
     )
     daily_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
-    daily_parser.add_argument(
+    daily_resume = daily_parser.add_mutually_exclusive_group()
+    daily_resume.add_argument(
         "--from-step",
         type=int,
         choices=range(1, 9),
@@ -602,13 +672,22 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="resume at phase 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, 6=journey, 7=base training hall, or 8=shop training hall",
     )
+    daily_resume.add_argument(
+        "--from-task",
+        choices=DAILY_TASK_IDS,
+        metavar="TASK",
+        help=(
+            "resume at a named business task and continue later tasks and phases; "
+            f"required entry pages by ID: {task_entry_help('daily-rewards')}"
+        ),
+    )
     daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
-    daily_parser.add_argument("--dry-run", action="store_true", help="print all six planned flows without clicking or sleeping")
+    daily_parser.add_argument("--dry-run", action="store_true", help="print planned task flows without clicking or sleeping")
     daily_parser.set_defaults(func=command_daily_rewards)
 
     legion_daily_parser = sub.add_parser(
         "legion-daily-rewards",
-        help="run the verified daily-cut, two foreign sweeps, and legion reward claim sequence",
+        help="run daily cut, foreign rewards, Legion shop purchases, and Journey gifts",
     )
     legion_daily_parser.add_argument("--sweep-times", type=int, default=2)
     legion_daily_parser.add_argument("--confirm-wait", type=non_negative_float, default=0.3)
@@ -616,6 +695,7 @@ def build_parser() -> argparse.ArgumentParser:
     legion_daily_parser.add_argument("--sweep-between", type=non_negative_float, default=0.3)
     legion_daily_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.3)
     legion_daily_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
+    _add_from_task_argument(legion_daily_parser, "legion-daily-rewards")
     legion_daily_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_daily_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_daily_parser.set_defaults(func=command_legion_daily_rewards)
@@ -630,6 +710,7 @@ def build_parser() -> argparse.ArgumentParser:
     legion_reward_parser.add_argument("--sweep-between", type=non_negative_float, default=0.3)
     legion_reward_parser.add_argument("--reward-page-wait", type=non_negative_float, default=0.3)
     legion_reward_parser.add_argument("--reward-wait", type=non_negative_float, default=0.3)
+    _add_from_task_argument(legion_reward_parser, "legion-reward-claims")
     legion_reward_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_reward_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_reward_parser.set_defaults(func=command_legion_reward_claims)
@@ -647,6 +728,7 @@ def build_parser() -> argparse.ArgumentParser:
     legion_sweep_parser.set_defaults(func=command_legion_sweep_batch)
 
     legion_gifts_parser = sub.add_parser("legion-journey-gifts", help="claim expedition gifts and perform three 40-energy search sweeps")
+    _add_from_task_argument(legion_gifts_parser, "legion-journey-gifts")
     legion_gifts_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_gifts_parser.add_argument("--dry-run", action="store_true")
     legion_gifts_parser.set_defaults(func=command_legion_journey_gifts)
@@ -655,6 +737,7 @@ def build_parser() -> argparse.ArgumentParser:
         "legion-shop-purchases",
         help="open the legion shop and scroll its purchase list to the bottom",
     )
+    _add_from_task_argument(legion_shop_parser, "legion-shop-purchases")
     legion_shop_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
     legion_shop_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     legion_shop_parser.set_defaults(func=command_legion_shop_purchases)
@@ -666,7 +749,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def command_requires_focus(args: argparse.Namespace | str) -> bool:
-    """Return whether a command needs focus, exempting mock dry-runs."""
+    """判断命令是否需要聚焦游戏窗口；只读命令和模拟坐标预演免于聚焦。"""
     if isinstance(args, str):
         return args not in NON_OPERATING_COMMANDS
     if args.command in NON_OPERATING_COMMANDS:

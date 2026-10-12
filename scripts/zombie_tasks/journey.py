@@ -1,9 +1,10 @@
-"""Journey tab resource workflow."""
+"""征途资源领取与净化者招募任务。"""
 
 from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
+from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix
 
 
 BUSINESS_WAITS = {
@@ -11,7 +12,7 @@ BUSINESS_WAITS = {
 }
 
 def command_journey_resource_claim(args: argparse.Namespace) -> int:
-    """Open Journey and collect the verified gold and wood resource bubbles once each."""
+    """征途资源：进入征途，分别领取金币和木材并关闭奖励弹窗。"""
     bounds = prepare_command_bounds(args)
     points = scaled_points(
         bounds,
@@ -44,7 +45,7 @@ def command_journey_resource_claim(args: argparse.Namespace) -> int:
 
 
 def command_journey_purifier_recruit(args: argparse.Namespace) -> int:
-    """Recruit all available Journey purifiers with one free click."""
+    """净化者招募：进入征途招募页面，执行一键招募并领取奖励。"""
     bounds = prepare_command_bounds(args)
     points = scaled_points(
         bounds,
@@ -71,6 +72,19 @@ def command_journey_purifier_recruit(args: argparse.Namespace) -> int:
 
 
 def command_journey_daily_rewards(args: argparse.Namespace) -> int:
-    """Run the existing Journey resources followed by the purifier route."""
-    command_journey_resource_claim(args)
-    return command_journey_purifier_recruit(args)
+    """征途每日任务：依次领取资源和执行净化者招募。"""
+    selection = select_task_suffix(
+        LOCAL_TASK_IDS["journey-daily-rewards"],
+        getattr(args, "from_task", None),
+        "journey-daily-rewards",
+    )
+    print_task_selection("journey-daily-rewards", selection, dry_run=args.dry_run)
+    for task_id, handler in (
+        ("resources", command_journey_resource_claim),
+        ("purifier", command_journey_purifier_recruit),
+    ):
+        if task_id in selection.remaining:
+            child_args = argparse.Namespace(**vars(args))
+            child_args.from_task = None
+            handler(child_args)
+    return 0

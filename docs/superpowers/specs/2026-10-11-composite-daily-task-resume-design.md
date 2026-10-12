@@ -30,6 +30,7 @@
 | `journey.purifier` | 净化者招募 |
 | `base.cafeteria` | 基地食堂奖励 |
 | `base.global_rescue` | 寰球救援 |
+| `base.global_expedition` | 寰球远征 |
 | `base.deep_abyss` | 深渊挑战 |
 | `base.terminal_crisis` | 终末危机 |
 | `base.battlefield_contest` | 战场争霸 |
@@ -45,18 +46,18 @@
 - `patrol-full-from-home`: `claim`, `quick_patrol`, `ad_patrol`
 - `legion-daily-rewards`: `daily_cut`, `foreign_rewards`, `shop`, `journey_gifts`
 - `journey-daily-rewards`: `resources`, `purifier`
-- `base-training-hall`: `cafeteria`, `global_rescue`, `deep_abyss`, `terminal_crisis`, `battlefield_contest`, `element_trial`, `play_shop`
+- `base-training-hall`: `cafeteria`, `global_rescue`, `global_expedition`, `deep_abyss`, `terminal_crisis`, `battlefield_contest`, `element_trial`, `play_shop`
 - `shop-training-hall`: `resource_gold`, `special_pack_gold`
 - `legion-reward-claims`: `sweeps`, `legion_rewards`, `personal_rewards`
 - `legion-shop-purchases`: `gun_blueprint`, `base_powder`, `enhancer`
 - `legion-journey-gifts`: `gift_claim`, `expedition`
-- `base-training-hall-shop`: `base_powder`, `gun_blueprint`, `base_materials`, `skill_manual`
+- `base-training-hall-shop`: `base_powder`, `gun_blueprint`, `base_materials`
 
 只包含一个业务任务的命令，以及重复执行同一种操作的批量命令，仍视为原子任务；现有次数参数继续控制批量大小。
 
 ## 页面与安全边界
 
-每次运行仍执行既有游戏窗口聚焦、几何校验和校准。使用 `--from-task` 时，用户需先将游戏停在所选业务任务的已知入口页面；帮助和任务计划输出需说明该页面前置条件。程序不读取或推断游戏内页面，不保存上次进度，也不自动重放前序导航。
+每次运行仍执行既有游戏窗口聚焦、几何校验和校准。使用 `--from-task` 时，用户需先将游戏停在所选业务任务的已知入口页面；帮助和任务计划输出需说明该页面前置条件。战场争霸和元素试炼从训练大厅列表续跑时默认先滚动到底部；显式传入 `--skip-scroll` 时，用户需自行确保列表已在底部。程序不读取或推断游戏内页面，不保存上次进度，也不自动重放前序导航。
 
 `--dry-run` 输出完整任务顺序、被跳过项、开始任务和后续任务，不发送点击、拖动或等待。参数校验应发生在任务的点击执行之前。此前已发生的任务仍由用户判断是否成功；续跑不把“曾经启动过”当作完成证据。
 

@@ -49,6 +49,9 @@ ACTIONS: Dict[str, Action] = {
     "battle_reward_dismiss": Action(250, 755, "dismiss battle reward popup"),
     "global_rescue_challenge": Action(358, 613, "global rescue challenge"),
     "global_rescue_free": Action(82, 277, "global rescue free reward"),
+    "global_expedition_challenge": Action(322, 746, "Global Expedition card challenge in the training-hall list"),
+    "global_expedition_free": Action(80, 290, "Global Expedition left-side free reward button"),
+    "global_expedition_back": Action(85, 908, "return from Global Expedition to the training hall"),
     "abyss_entry": Action(322, 315, "Deep Abyss challenge entry in the training-hall list"),
     "abyss_challenge": Action(330, 842, "Deep Abyss challenge button"),
     "abyss_monster_info_confirm": Action(246, 751, "continue past the Deep Abyss monster-info popup"),
@@ -160,7 +163,7 @@ ACTIONS: Dict[str, Action] = {
 REWARD_ACTION_NAMES = frozenset({
     "patrol_claim", "quick_patrol", "ad_close_top", "ad_close_lower",
     "calendar_gift", "mail_claim_all", "welfare_entry", "pass_free_claim",
-    "work_plan_sign", "cafeteria_claim", "global_rescue_free",
+    "work_plan_sign", "cafeteria_claim", "global_rescue_free", "global_expedition_free",
     "terminal_crisis_confirm", "abyss_sweep", "battle_sweep_last", "idle_claim",
     "core_sweep_ten", "play_shop_buy", "journey_gold_claim",
     "journey_wood_claim", "legion_cut_once", "legion_sweep_confirm",
