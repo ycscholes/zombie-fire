@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
-from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix, task_entry_page
+from .resume import (
+    LOCAL_TASK_IDS,
+    print_task_selection,
+    report_desktop_task,
+    select_enabled_task_suffix,
+    task_entry_page,
+)
 
 BUSINESS_WAITS = {
     "patrol_truck": 0.3,
@@ -114,10 +120,11 @@ def dismiss_reward_once(
 
 def command_patrol_full_from_home(args: argparse.Namespace) -> int:
     """完整巡逻：从首页领取巡逻收益，执行指定次数的普通和广告快速巡逻后关闭页面。"""
-    selection = select_task_suffix(
+    selection = select_enabled_task_suffix(
         LOCAL_TASK_IDS["patrol-full-from-home"],
         getattr(args, "from_task", None),
         "patrol-full-from-home",
+        getattr(args, "desktop_task_ids", None),
     )
     if not (args.dry_run and getattr(args, "json", False)):
         print_task_selection("patrol-full-from-home", selection, dry_run=args.dry_run)
@@ -171,21 +178,27 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
                 f"quick_times={args.quick_times}, ad_times={args.ad_times}, "
                 f"fit={plan['fit']}, event_waits={plan['event_waits']}, points={points}"
             )
+        for task_id in selection.remaining:
+            report_desktop_task(args, task_id, "started")
+            report_desktop_task(args, task_id, "completed")
         return 0
 
     tasks = set(selection.remaining)
     if "claim" in tasks:
+        report_desktop_task(args, "claim", "started")
         backend = _perform_event("patrol_truck", points["patrol_truck"], args, bounds)
         set_phase_state(args, "patrol_opened")
         print(f"patrol full: clicked patrol truck via {backend}", flush=True)
         backend = _perform_event("patrol_claim", points["patrol_claim"], args, bounds, kind="reward")
         print(f"patrol full: clicked patrol claim via {backend}", flush=True)
         backend = dismiss_reward_once(args, points, bounds, label="patrol full claim")
+        report_desktop_task(args, "claim", "completed")
     elif tasks:
         # A resumed quick/ad task starts with the patrol panel already open.
         set_phase_state(args, "patrol_opened")
 
     if "quick_patrol" in tasks:
+        report_desktop_task(args, "quick_patrol", "started")
         for idx in range(args.quick_times):
             backend = _perform_event("quick_patrol_reward", points["quick_patrol"], args, bounds, kind="reward")
             print(f"patrol full quick {idx + 1}/{args.quick_times}: clicked quick-patrol via {backend}", flush=True)
@@ -195,7 +208,9 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
                 bounds,
                 label=f"patrol full quick {idx + 1}/{args.quick_times}",
             )
+        report_desktop_task(args, "quick_patrol", "completed")
     if "ad_patrol" in tasks:
+        report_desktop_task(args, "ad_patrol", "started")
         for idx in range(args.ad_times):
             backend = run_ad_reward_cycle(
                 start_point=points["quick_patrol"],
@@ -215,6 +230,7 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             # 完整巡逻原有的奖励关闭后业务等待为 0.3 秒，保留该时序。
             sleep_between(BUSINESS_WAITS["patrol_reward_dismiss"])
             print(f"patrol full ad {idx + 1}/{args.ad_times}: completed shared ad reward cycle via {backend}", flush=True)
+        report_desktop_task(args, "ad_patrol", "completed")
     backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(
         f"patrol full complete: attempted {selection.remaining}; "

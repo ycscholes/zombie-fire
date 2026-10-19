@@ -1,0 +1,12 @@
+node_modules/
+.venv/
+dist/
+build/
+release/
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/binaries/*
+src-tauri/resources/bin/*
+!src-tauri/binaries/.gitkeep
+!src-tauri/resources/bin/.gitkeep
+*.log

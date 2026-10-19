@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
-from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix
+from .resume import (
+    LOCAL_TASK_IDS,
+    print_task_selection,
+    report_desktop_task,
+    select_enabled_task_suffix,
+    select_task_suffix,
+)
 
 BUSINESS_WAITS = {
     "abyss_challenge": 3.0,
@@ -37,7 +43,7 @@ def _click_action(
         backend = perform_tab_click(*points[action], args.backend, bounds)
     elif post_wait_seconds is not None:
         backend = perform_click(*points[action], args.backend, bounds, wait_after=False)
-        time.sleep(post_wait_seconds)
+        sleep_between(post_wait_seconds + 0.5)
     else:
         backend = perform_action(action, *points[action], args.backend, bounds, BUSINESS_WAITS)
     verb = "dismissed" if dismiss else "clicked"
@@ -57,7 +63,7 @@ def scroll_to_bottom(
     x1, y1 = scale_point(ACTIONS[start_action], bounds)
     x2, y2 = scale_point(ACTIONS[end_action], bounds)
     perform_drag(x1, y1, x2, y2, bounds)
-    time.sleep(1.0)
+    sleep_between(1.5)
 
 
 def _run_deep_abyss_subtask(
@@ -325,12 +331,13 @@ def command_base_training_hall_element_trial(args: argparse.Namespace) -> int:
 
 
 def command_base_training_hall(args: argparse.Namespace) -> int:
-    """Run the verified free base, training-hall, battlefield, and element routes."""
+    """基地每日组合任务：按顺序处理食堂、训练挑战和玩法商店，并为桌面任务补齐导航。"""
     from_task = getattr(args, "from_task", None)
-    selection = select_task_suffix(
+    selection = select_enabled_task_suffix(
         LOCAL_TASK_IDS["base-training-hall"],
         from_task,
         "base-training-hall",
+        getattr(args, "desktop_task_ids", None),
     )
     print_task_selection("base-training-hall", selection, dry_run=args.dry_run)
     if args.battle_times < 1:
@@ -356,11 +363,29 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
             f"base training hall dry-run: tasks={selection.remaining}, skipped={selection.skipped}, "
             f"battle_times={args.battle_times}, skip_scroll={args.skip_scroll}, points={points}"
         )
+        for task_id in selection.remaining:
+            report_desktop_task(args, task_id, "started")
+            report_desktop_task(args, task_id, "completed")
         return 0
 
     tasks = set(selection.remaining)
+    hall_at_bottom = False
+
+    # 桌面删减前置阶段时，仅导航到当前首项所需页面，不额外领取奖励。
+    navigate_pending = bool(getattr(args, "desktop_navigate_base", False))
+
+    def start_base_task(task_id: str) -> None:
+        nonlocal navigate_pending
+        report_desktop_task(args, task_id, "started")
+        if navigate_pending:
+            _click_action(args, points, "base_tab", bounds)
+            if getattr(args, "desktop_navigate_training_hall", False):
+                _click_action(args, points, "training_hall", bounds)
+            navigate_pending = False
+
     if "cafeteria" in tasks:
-        if from_task is None:
+        start_base_task("cafeteria")
+        if from_task is None and not getattr(args, "desktop_navigate_base", False):
             _click_action(args, points, "base_tab", bounds)
         # 食堂：领取免费奖励后返回基地。
         _click_action(args, points, "cafeteria", bounds)
@@ -368,38 +393,62 @@ def command_base_training_hall(args: argparse.Namespace) -> int:
         _click_action(args, points, "training_reward_dismiss", bounds, dismiss=True)
         _click_action(args, points, "cafeteria_back", bounds)
         _click_action(args, points, "training_hall", bounds)
+        report_desktop_task(args, "cafeteria", "completed")
 
     if "global_rescue" in tasks:
+        start_base_task("global_rescue")
         _run_global_rescue_subtask(args, points, bounds)
+        report_desktop_task(args, "global_rescue", "completed")
     if "global_expedition" in tasks:
+        start_base_task("global_expedition")
         _run_global_expedition_subtask(args, points, bounds)
+        report_desktop_task(args, "global_expedition", "completed")
     if "deep_abyss" in tasks:
+        start_base_task("deep_abyss")
         _run_deep_abyss_subtask(args, points, bounds)
         # Abyss returns to the main game; restore the hall page for later tasks.
         _click_action(args, points, "base_tab", bounds)
         _click_action(args, points, "training_hall", bounds)
+        hall_at_bottom = False
+        report_desktop_task(args, "deep_abyss", "completed")
     if "terminal_crisis" in tasks:
+        start_base_task("terminal_crisis")
         _run_terminal_crisis_subtask(args, points, bounds)
+        # 终末危机会先滚到底；后续底部卡片可沿用这个大厅位置。
+        hall_at_bottom = True
+        report_desktop_task(args, "terminal_crisis", "completed")
     if "battlefield_contest" in tasks:
-        if selection.selected == "battlefield_contest":
+        start_base_task("battlefield_contest")
+        # 若终末危机被移除，仍须先把大厅列表滚到底才能进入巅峰争霸。
+        if not hall_at_bottom:
             scroll_to_bottom(args)
             if not getattr(args, "skip_scroll", False):
-                print("base training hall: scroll_to_bottom before resumed Battlefield Contest via cgclick", flush=True)
+                print("base training hall: scroll_to_bottom before Battlefield Contest via cgclick", flush=True)
         _run_battlefield_contest_subtask(args, points, bounds)
+        hall_at_bottom = True
+        report_desktop_task(args, "battlefield_contest", "completed")
     if "element_trial" in tasks:
-        if selection.selected == "element_trial":
+        start_base_task("element_trial")
+        # 元素试炼同样位于训练大厅底部，必要时补做列表导航。
+        if not hall_at_bottom:
             scroll_to_bottom(args)
             if not getattr(args, "skip_scroll", False):
-                print("base training hall: scroll_to_bottom before resumed Element Trial via cgclick", flush=True)
+                print("base training hall: scroll_to_bottom before Element Trial via cgclick", flush=True)
         _run_element_trial_subtask(args, points, bounds)
+        hall_at_bottom = True
+        report_desktop_task(args, "element_trial", "completed")
     if "play_shop" in tasks:
+        start_base_task("play_shop")
         shop_args = argparse.Namespace(**vars(args))
         shop_args.mock_bounds = bounds
         shop_args.fit = False
         shop_args.dry_run = False
         shop_args.from_task = None
         shop_args.skip_scroll = False
+        shop_args.desktop_task_ids = None
+        shop_args.desktop_task_event = None
         command_base_training_hall_shop(shop_args)
+        report_desktop_task(args, "play_shop", "completed")
     sleep_between(0.5)
     backend = _click_action(args, points, "training_hall_back", bounds)
     print(

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
-from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix
+from .resume import (
+    LOCAL_TASK_IDS,
+    print_task_selection,
+    report_desktop_task,
+    select_enabled_task_suffix,
+)
 
 
 BUSINESS_WAITS = {
@@ -73,10 +78,11 @@ def command_journey_purifier_recruit(args: argparse.Namespace) -> int:
 
 def command_journey_daily_rewards(args: argparse.Namespace) -> int:
     """征途每日任务：依次领取资源和执行净化者招募。"""
-    selection = select_task_suffix(
+    selection = select_enabled_task_suffix(
         LOCAL_TASK_IDS["journey-daily-rewards"],
         getattr(args, "from_task", None),
         "journey-daily-rewards",
+        getattr(args, "desktop_task_ids", None),
     )
     print_task_selection("journey-daily-rewards", selection, dry_run=args.dry_run)
     for task_id, handler in (
@@ -84,7 +90,13 @@ def command_journey_daily_rewards(args: argparse.Namespace) -> int:
         ("purifier", command_journey_purifier_recruit),
     ):
         if task_id in selection.remaining:
+            report_desktop_task(args, task_id, "started")
             child_args = argparse.Namespace(**vars(args))
             child_args.from_task = None
-            handler(child_args)
+            child_args.desktop_task_ids = None
+            child_args.desktop_task_event = None
+            result = handler(child_args)
+            if result not in (None, 0):
+                raise ClickError(f"journey daily subtask {task_id} exited with status {result}")
+            report_desktop_task(args, task_id, "completed")
     return 0

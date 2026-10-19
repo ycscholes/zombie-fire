@@ -61,6 +61,8 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 CGCLICK_CACHE_DIR = SKILL_ROOT / ".generated"
 CGCLICK_BIN_PATH = CGCLICK_CACHE_DIR / "zombie_cgclick"
 CGCLICK_SOURCE_PATH = CGCLICK_CACHE_DIR / "zombie_cgclick.c"
+_cancel_check: Callable[[], None] | None = None
+_cancel_wait: Callable[[float], None] | None = None
 CGCLICK_SOURCE = r"""
 #include <ApplicationServices/ApplicationServices.h>
 #include <stdlib.h>
@@ -151,6 +153,28 @@ def print(*values, sep: str = " ", end: str = "\n", file=None, flush: bool = Fal
         for line in lines
     )
     builtins.print(timestamped, end=end, file=target, flush=flush)
+
+
+def configure_cancellation(
+    check: Callable[[], None] | None = None,
+    wait: Callable[[float], None] | None = None,
+) -> tuple[Callable[[], None] | None, Callable[[float], None] | None]:
+    """为桌面 sidecar 设置可选的协作取消钩子，普通 CLI 默认保持原行为。"""
+    global _cancel_check, _cancel_wait
+    previous = (_cancel_check, _cancel_wait)
+    _cancel_check, _cancel_wait = check, wait
+    return previous
+
+
+def _wait(seconds: float) -> None:
+    if _cancel_check is not None:
+        _cancel_check()
+    if _cancel_wait is None:
+        time.sleep(seconds)
+    else:
+        _cancel_wait(seconds)
+    if _cancel_check is not None:
+        _cancel_check()
 
 
 @dataclass(frozen=True)
@@ -280,6 +304,8 @@ tell application "System Events"
     set frontTitle to ""
     try
       set frontTitle to name of frontWindow
+    on error titleError number titleErrorNumber
+      error "could not read foreground window title: " & titleError & " (" & titleErrorNumber & ")" number titleErrorNumber
     end try
     set p to position of frontWindow
     set s to size of frontWindow
@@ -348,6 +374,60 @@ def run_osascript(script: str) -> str:
     return proc.stdout.strip()
 
 
+def _window_search_failure(
+    operation: str,
+    search_error: ClickError,
+    *,
+    snapshot: Dict[str, object] | None = None,
+    snapshot_error: ClickError | None = None,
+) -> ClickError:
+    """补充窗口查找失败时的前台上下文、权限分类和底层错误。"""
+    details = str(search_error).strip() or repr(search_error)
+    if snapshot_error is not None:
+        front_context = f"当前前台应用或窗口标题无法读取：{snapshot_error}"
+        if str(snapshot_error) not in details:
+            details = f"{details}; foreground snapshot failed: {snapshot_error}"
+    elif snapshot is not None:
+        front_context = (
+            f"当前前台应用「{snapshot.get('app') or '未知'}」"
+            f"窗口标题「{snapshot.get('title') or '空'}」"
+        )
+    else:
+        try:
+            snapshot = front_window_snapshot()
+        except ClickError as context_error:
+            front_context = f"当前前台应用或窗口标题无法读取：{context_error}"
+            details = f"{details}; foreground snapshot failed: {context_error}"
+        else:
+            front_context = (
+                f"当前前台应用「{snapshot.get('app') or '未知'}」"
+                f"窗口标题「{snapshot.get('title') or '空'}」"
+            )
+
+    diagnostic = details.lower()
+    permission_denied = any(
+        marker in diagnostic
+        for marker in (
+            "not authorized to send apple events",
+            "not permitted to send apple events",
+            "not allowed assistive access",
+            "assistive access is disabled",
+            "not authorized to use accessibility",
+            "accessibility api is disabled",
+        )
+    ) or any(code in diagnostic for code in ("-1743", "-1719", "-25211"))
+    if permission_denied:
+        guidance = (
+            "检测到 macOS 自动化或辅助功能权限拒绝。请在“系统设置 > 隐私与安全性 > 自动化”中允许当前桌面 App 控制 System Events，"
+            "并在“辅助功能”中授权当前桌面 App，然后重新尝试。"
+        )
+    else:
+        guidance = "请在微信中打开「向僵尸开炮」，进入界面显示的起始页面，并保持游戏窗口可见后重试。"
+    return ClickError(
+        f"{operation}失败：未能确认「向僵尸开炮」游戏窗口；{front_context}。{guidance} 底层错误详情：{details}"
+    )
+
+
 def front_window_bounds() -> Bounds:
     snapshot = front_window_snapshot()
     return Bounds(
@@ -362,9 +442,13 @@ def front_window_bounds() -> Bounds:
 
 def fit_game_window() -> Bounds:
     script = f'''
+set searchErrorCount to 0
+set searchErrorText to ""
 tell application "System Events"
   repeat with candidateProc in (application processes whose background only is false)
+    set candidateName to "unknown process"
     try
+      set candidateName to name of candidateProc
       repeat with candidateWindow in windows of candidateProc
         if (name of candidateWindow) contains "向僵尸开炮" then
           set position of candidateWindow to {{2, 33}}
@@ -380,12 +464,24 @@ tell application "System Events"
           return frontName & tab & frontBundle & tab & (item 1 of p) & tab & (item 2 of p) & tab & (item 1 of s) & tab & (item 2 of s)
         end if
       end repeat
+    on error errMsg number errNum
+      set searchErrorCount to searchErrorCount + 1
+      if searchErrorCount <= 5 or errNum is -1743 or errNum is -1719 or errNum is -25211 then
+        if searchErrorText is not "" then set searchErrorText to searchErrorText & " | "
+        set searchErrorText to searchErrorText & candidateName & ": " & errMsg & " (" & errNum & ")"
+      end if
     end try
   end repeat
 end tell
+if searchErrorCount > 0 then
+  error ("向僵尸开炮 window not found; window inspection errors=" & searchErrorText & " [count=" & searchErrorCount & "]")
+end if
 error "向僵尸开炮 window not found"
 '''
-    return parse_bounds(run_osascript(script))
+    try:
+        return parse_bounds(run_osascript(script))
+    except ClickError as exc:
+        raise _window_search_failure("自动调整游戏窗口", exc) from exc
 
 
 def parse_mock_bounds(value: str) -> Bounds:
@@ -506,7 +602,7 @@ def ensure_game_ready_after_ad(
                     "patrol ad did not return to the calibrated game window; "
                     "stop without trying ad_close_lower"
                 ) from exc
-            time.sleep(interval)
+            _wait(interval)
 
 
 def scale_point(action: Action, bounds: Bounds) -> Tuple[int, int]:
@@ -552,6 +648,19 @@ def click_cliclick(x: int, y: int) -> bool:
 
 def ensure_cgclick() -> bool:
     global CGCLICK_BIN
+    override = os.environ.get("ZOMBIE_CGCLICK_BIN")
+    if override:
+        if os.path.isfile(override) and os.access(override, os.X_OK):
+            CGCLICK_BIN = override
+            return True
+        return False
+    if getattr(sys, "frozen", False):
+        bundled_root = getattr(sys, "_MEIPASS", None)
+        bundled_helper = Path(bundled_root) / "resources" / "bin" / "zombie_cgclick" if bundled_root else None
+        if bundled_helper and bundled_helper.is_file() and os.access(bundled_helper, os.X_OK):
+            CGCLICK_BIN = str(bundled_helper)
+            return True
+        return False
     source_matches = (
         CGCLICK_SOURCE_PATH.exists()
         and CGCLICK_SOURCE_PATH.read_text(encoding="utf-8") == CGCLICK_SOURCE
@@ -614,11 +723,11 @@ def click_system_events(x: int, y: int) -> bool:
 
 
 def wait_after_click() -> None:
-    time.sleep(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX))
+    _wait(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX))
 
 
 def wait_after_tab_click() -> None:
-    time.sleep(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX) + TAB_POST_CLICK_EXTRA_SECONDS)
+    _wait(random.uniform(POST_CLICK_WAIT_MIN, POST_CLICK_WAIT_MAX) + TAB_POST_CLICK_EXTRA_SECONDS)
 
 
 def try_click_backend(name: str, x: int, y: int) -> tuple[bool, str]:
@@ -652,6 +761,8 @@ def log_operation(kind: str, status: str, details: str) -> None:
 
 def input_preflight(expected_bounds: Bounds, *, retry: bool = False) -> tuple[str, float, str]:
     """Use a bounded session audit when safe, otherwise run the full guard."""
+    if _cancel_check is not None:
+        _cancel_check()
     started_at = time.monotonic()
     session = _input_session
     if session is None:
@@ -722,6 +833,8 @@ def perform_click(
             retry=attempt_index > 0,
         )
         for candidate in click_backend_candidates(backend):
+            if _cancel_check is not None:
+                _cancel_check()
             delivery_started_at = time.monotonic()
             clicked, reason = try_click_backend(candidate, x, y)
             delivery_ms = (time.monotonic() - delivery_started_at) * 1000
@@ -739,7 +852,7 @@ def perform_click(
                 )
                 if extra_wait_seconds is not None:
                     reward_wait_started_at = time.monotonic()
-                    time.sleep(extra_wait_seconds)
+                    _wait(extra_wait_seconds)
                     log_operation(
                         "reward-wait",
                         "success",
@@ -809,6 +922,8 @@ def perform_drag(
     if expected_bounds is None:
         raise ClickDeliveryError("real drags require calibrated game-window bounds")
     mode, preflight_ms, session_diagnostic = input_preflight(expected_bounds)
+    if _cancel_check is not None:
+        _cancel_check()
     delivery_started_at = time.monotonic()
     try:
         delivered = drag_cgclick_bin(x1, y1, x2, y2)
@@ -838,7 +953,7 @@ def perform_drag(
 
 
 def sleep_between(seconds: float) -> None:
-    time.sleep(max(MIN_WAIT_SECONDS, seconds - 0.5))
+    _wait(max(MIN_WAIT_SECONDS, seconds - 0.5))
 
 
 def perform_action(
@@ -987,9 +1102,13 @@ def focus_game_window_at_start(expected_bounds: Bounds | None = None) -> Bounds:
         )
         expected_match_end = "end if"
     script = f'''
+set searchErrorCount to 0
+set searchErrorText to ""
 tell application "System Events"
   repeat with candidateProc in (application processes whose background only is false)
+    set candidateName to "unknown process"
     try
+      set candidateName to name of candidateProc
       repeat with candidateWindow in windows of candidateProc
         if (name of candidateWindow) contains "向僵尸开炮" then
           set p to position of candidateWindow
@@ -1019,13 +1138,27 @@ tell application "System Events"
       end repeat
     on error errMsg number errNum
       if errMsg starts with "could not focus 向僵尸开炮 window:" then error errMsg number errNum
+      set searchErrorCount to searchErrorCount + 1
+      if searchErrorCount <= 5 or errNum is -1743 or errNum is -1719 or errNum is -25211 then
+        if searchErrorText is not "" then set searchErrorText to searchErrorText & " | "
+        set searchErrorText to searchErrorText & candidateName & ": " & errMsg & " (" & errNum & ")"
+      end if
     end try
   end repeat
 end tell
+if searchErrorCount > 0 then
+  error ("向僵尸开炮 window not found; window inspection errors=" & searchErrorText & " [count=" & searchErrorCount & "]")
+end if
 error "向僵尸开炮 window not found"
 '''
-    target = parse_bounds(run_osascript(script))
-    snapshot = front_window_snapshot()
+    try:
+        target = parse_bounds(run_osascript(script))
+    except ClickError as exc:
+        raise _window_search_failure("定位并聚焦游戏窗口", exc) from exc
+    try:
+        snapshot = front_window_snapshot()
+    except ClickError as exc:
+        raise _window_search_failure("验证已聚焦游戏窗口", exc, snapshot_error=exc) from exc
     focused = Bounds(
         str(snapshot["app"]),
         str(snapshot["bundle"]),
@@ -1036,15 +1169,23 @@ error "向僵尸开炮 window not found"
     )
     title = str(snapshot["title"])
     if not looks_like_wechat(focused) or "向僵尸开炮" not in title:
-        raise WindowStateError(
-            "game window did not become frontmost: "
-            f"title={title!r} "
-            f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
+        raise _window_search_failure(
+            "验证并聚焦游戏窗口",
+            WindowStateError(
+                "game window did not become frontmost: "
+                f"title={title!r} "
+                f"app={snapshot.get('app')!r} bundle={snapshot.get('bundle')!r}"
+            ),
+            snapshot=snapshot,
         )
     if focused != target:
-        raise ClickError(
-            "focused game window does not match selected target: "
-            f"expected {target.x},{target.y} {target.width}x{target.height}; "
-            f"got {focused.x},{focused.y} {focused.width}x{focused.height}"
+        raise _window_search_failure(
+            "验证聚焦后的游戏窗口",
+            ClickError(
+                "focused game window does not match selected target: "
+                f"expected {target.x},{target.y} {target.width}x{target.height}; "
+                f"got {focused.x},{focused.y} {focused.width}x{focused.height}"
+            ),
+            snapshot=snapshot,
         )
     return target

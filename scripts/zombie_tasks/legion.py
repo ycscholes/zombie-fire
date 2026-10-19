@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from ..zombie_common import *
 from ..zombie_actions import *
-from .resume import LOCAL_TASK_IDS, print_task_selection, select_task_suffix
+from .resume import (
+    LOCAL_TASK_IDS,
+    print_task_selection,
+    report_desktop_task,
+    select_enabled_task_suffix,
+    select_task_suffix,
+)
 
 from .base import scroll_to_bottom as _base_scroll_to_bottom
 
@@ -162,10 +168,11 @@ def _run_legion_daily_cut(args: argparse.Namespace) -> int:
 
 def command_legion_daily_rewards(args: argparse.Namespace) -> int:
     """军团每日任务：依次执行每日一刀、异域挑战领奖、商店购买和征途赠礼。"""
-    selection = select_task_suffix(
+    selection = select_enabled_task_suffix(
         LOCAL_TASK_IDS["legion-daily-rewards"],
         getattr(args, "from_task", None),
         "legion-daily-rewards",
+        getattr(args, "desktop_task_ids", None),
     )
     print_task_selection("legion-daily-rewards", selection, dry_run=args.dry_run)
     if "foreign_rewards" in selection.remaining and args.sweep_times < 1:
@@ -193,12 +200,25 @@ def command_legion_daily_rewards(args: argparse.Namespace) -> int:
         "shop": command_legion_shop_purchases,
         "journey_gifts": command_legion_journey_gifts,
     }
+    # 模拟与真实执行共用同一子任务顺序，桌面事件包住每个既有处理器。
+    navigate_pending = not args.dry_run and bool(getattr(args, "desktop_navigate_legion", False))
     for task_id in selection.remaining:
+        report_desktop_task(args, task_id, "started")
+        if navigate_pending:
+            backend = perform_tab_click(*points["legion_tab"], args.backend, bounds)
+            print(f"legion daily rewards: opened Legion page for selected later tasks via {backend}", flush=True)
+            navigate_pending = False
         child_args = argparse.Namespace(**vars(args))
         child_args.mock_bounds = bounds
         child_args.fit = False
         child_args.from_task = None
-        handlers[task_id](child_args)
+        child_args.desktop_task_ids = None
+        child_args.desktop_task_event = None
+        child_args.desktop_navigate_legion = False
+        result = handlers[task_id](child_args)
+        if result not in (None, 0):
+            raise ClickError(f"legion daily subtask {task_id} exited with status {result}")
+        report_desktop_task(args, task_id, "completed")
     if args.dry_run:
         return 0
     print(f"legion daily rewards complete: attempted {selection.remaining}")

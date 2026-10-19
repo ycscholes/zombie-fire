@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "向僵尸开炮日常助手",
+  "version": "0.1.0",
+  "identifier": "app.codex.zombiefire.daily",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "向僵尸开炮 · 日常助手",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1040,
+        "minHeight": 680,
+        "center": true,
+        "alwaysOnTop": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "macOS": {
+      "infoPlist": "Info.plist"
+    },
+    "category": "public.app-category.utilities",
+    "shortDescription": "向僵尸开炮日常任务本地控制面板",
+    "longDescription": "管理和执行本机游戏自动化任务。",
+    "externalBin": ["binaries/zombie-fire-worker"],
+    "resources": ["resources/bin/zombie_cgclick"]
+  }
+}

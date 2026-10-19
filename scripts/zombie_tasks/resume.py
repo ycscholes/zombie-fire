@@ -190,6 +190,22 @@ def select_task_suffix(
     return TaskSelection(ids[:start], ids[start:], True)
 
 
+def select_enabled_task_suffix(
+    task_ids: Sequence[str],
+    from_task: str | None,
+    scope: str,
+    enabled_task_ids: Sequence[str] | None = None,
+) -> TaskSelection:
+    """桌面每日计划：在保留原起点校验的同时，仅留下用户启用的业务任务。"""
+    selection = select_task_suffix(task_ids, from_task, scope)
+    if enabled_task_ids is None:
+        return selection
+    allowed = set(enabled_task_ids)
+    remaining = tuple(task_id for task_id in selection.remaining if task_id in allowed)
+    skipped = tuple(task_id for task_id in task_ids if task_id not in remaining)
+    return TaskSelection(skipped, remaining, selection.explicit_start)
+
+
 def report_desktop_task(args, task_id: str, status: str) -> None:
     """向桌面 sidecar 报告组合任务的子任务开始或结束，不影响原 CLI。"""
     callback = getattr(args, "desktop_task_event", None)

@@ -1,0 +1,27 @@
+{
+  "name": "zombie-fire-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "build": "vite build",
+    "tauri": "tauri",
+    "build:worker": "bash scripts/build-worker.sh",
+    "build:app": "bash scripts/build-macos.sh",
+    "setup:signing": "bash scripts/setup-macos-signing.sh",
+    "upgrade:macos": "bash scripts/upgrade-macos.sh",
+    "dev:app": "npm run build:worker && tauri dev",
+    "test:release-config": "node scripts/test-release-config.mjs",
+    "test:macos-upgrade": "python3 -B -m unittest scripts/test_install_macos.py",
+    "test:ui-model": "node --test scripts/task-view-model.test.mjs",
+    "self-test": "node scripts/self-test.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.2",
+    "vite": "8.3.4"
+  }
+}

@@ -121,6 +121,30 @@ atomic click action.
   recovery click for that session, update the helper coordinate, and stop
   retrying the stale helper point.
 
+## Desktop App Task Plan And Defaults
+
+- The App shows tasks as game tab → module → task. The leaves stay in the real
+  `DAILY_TASK_IDS` run order; if the route returns to a prior tab, keep that
+  later group in place instead of regrouping tabs and changing execution order.
+- The daily page contains run controls and the starting task only. Edit task
+  arguments in the single-command view. A shared parameter has one saved value
+  used by both its command and the matching daily phase, including status,
+  claim count, patrol/legion/base counts, backend, and timing fields. Editing a
+  matching command updates what the daily phase receives.
+- App command forms default reward-status choices to `available`, animation
+  skip choices to `checked`, and task claim counts to `3`. Patrol, legion, base,
+  and wait values use the daily composite command's existing defaults; aliases
+  show that same default. These are saved form defaults, not observations of
+  the current game screen. Before live execution, inspect each gated page in
+  Computer Use and update its shared command value when the visible state or
+  count differs.
+- Direct `zombie_click.py` CLI commands retain their safe gate behavior: an
+  omitted status or claim count remains unset and the gated task skips. App
+  form defaults do not change the CLI parser defaults.
+- The macOS permission notice collapses only when both Accessibility and
+  System Events Automation report `granted` without a read error. Unknown,
+  denied, timed-out, or failed checks remain visible.
+
 ## Safety
 
 - Claim only free rewards.
