@@ -74,7 +74,7 @@ JOURNEY_GIFT_ACTIONS = (
     "legion_journey_entry", "legion_journey_gifts", "legion_journey_claim_first",
     "legion_journey_reward_dismiss", "legion_journey_go", "legion_journey_sweep_tab",
     "legion_journey_sweep", "legion_journey_search_close",
-    "legion_journey_base_entry", "legion_tab",
+    "legion_journey_base_entry", "legion_tab", "back_bottom_left",
 )
 JOURNEY_GIFT_WAITS = {
     "legion_journey_entry": 0.5,
@@ -84,7 +84,7 @@ JOURNEY_GIFT_WAITS = {
 
 
 def command_legion_journey_gifts(args: argparse.Namespace) -> int:
-    """军团征途：领取首个赠礼并尝试三次搜索扫荡，经地图基地返回军团页。"""
+    """军团征途：领取首个赠礼并点击军团礼物页左下角返回。"""
     selection = select_task_suffix(
         LOCAL_TASK_IDS["legion-journey-gifts"],
         getattr(args, "from_task", None),
@@ -106,6 +106,7 @@ def command_legion_journey_gifts(args: argparse.Namespace) -> int:
         # steps.append("legion_journey_sweep_tab")
         # steps.extend(["legion_journey_sweep", "legion_journey_reward_dismiss"] * 3)
         # steps.extend(("legion_journey_search_close", "legion_journey_base_entry", "legion_tab"))
+    steps.append("back_bottom_left")
     if args.dry_run:
         print(
             f"legion journey gifts dry-run: tasks={selection.remaining}, skipped={selection.skipped}, "
@@ -124,14 +125,14 @@ def command_legion_journey_gifts(args: argparse.Namespace) -> int:
             set_phase_state(args, "legion_journey_search_closed")
         elif action == "legion_journey_base_entry":
             set_phase_state(args, "legion_journey_base_opened")
-        elif action == "legion_tab":
+        elif action in {"legion_tab", "back_bottom_left"}:
             set_phase_state(args, "legion_journey_complete")
         print(f"legion journey gifts: {action} via {backend}", flush=True)
         if action in JOURNEY_GIFT_WAITS:
             sleep_between(JOURNEY_GIFT_WAITS[action])
     print(
         f"legion journey gifts complete: attempted {selection.remaining}; "
-        "clicked map base then returned to legion tab",
+        "clicked the bottom-left return button on the legion gifts page",
         flush=True,
     )
     return 0

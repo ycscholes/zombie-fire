@@ -12,6 +12,10 @@ DAILY_TASK_IDS = (
     "patrol.claim",
     "patrol.quick_patrol",
     "patrol.ad_patrol",
+    "mechanical.shock",
+    "pass.daily",
+    "armed.descent",
+    "mimic.card_library",
     "calendar",
     "welfare",
     "mail",
@@ -52,6 +56,10 @@ DAILY_TASK_ENTRY_PAGES = {
     "patrol.claim": "首页",
     "patrol.quick_patrol": "巡逻面板",
     "patrol.ad_patrol": "巡逻面板",
+    "mechanical.shock": "首页（须按本次页面确认动画复选框、任务首行可领奖数及机甲械斗一键领取状态）",
+    "pass.daily": "首页（须按本次页面观察确认通行证免费领取与当天签到状态）",
+    "armed.descent": "首页（须按本次 Computer Use 确认动画、免费抽取及任务首行状态）",
+    "mimic.card_library": "首页（须按本次 Computer Use 确认动画、免费抽取、任务首行及红点一键奖励状态）",
     "calendar": "首页",
     "welfare": "首页",
     "mail": "首页",
@@ -128,6 +136,10 @@ DAILY_TASK_TARGETS = {
     "patrol.claim": ("patrol", "claim"),
     "patrol.quick_patrol": ("patrol", "quick_patrol"),
     "patrol.ad_patrol": ("patrol", "ad_patrol"),
+    "mechanical.shock": ("mechanical_shock", None),
+    "pass.daily": ("battle_pass", None),
+    "armed.descent": ("armed_descent", None),
+    "mimic.card_library": ("mimic_card_library", None),
     "calendar": ("calendar", None),
     "welfare": ("welfare", None),
     "mail": ("mail", None),
@@ -176,6 +188,13 @@ def select_task_suffix(
         choices = ", ".join(ids)
         raise ClickError(f"unknown --from-task {from_task!r} for {scope}; choose one of: {choices}") from exc
     return TaskSelection(ids[:start], ids[start:], True)
+
+
+def report_desktop_task(args, task_id: str, status: str) -> None:
+    """向桌面 sidecar 报告组合任务的子任务开始或结束，不影响原 CLI。"""
+    callback = getattr(args, "desktop_task_event", None)
+    if callback is not None:
+        callback(task_id, status)
 
 
 def print_task_selection(scope: str, selection: TaskSelection, *, dry_run: bool) -> None:

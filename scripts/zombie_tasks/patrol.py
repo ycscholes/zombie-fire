@@ -42,18 +42,24 @@ def command_patrol_ads_batch(args: argparse.Namespace) -> int:
             f"times={args.times}, event_waits={BUSINESS_WAITS}, points={points}"
         )
         return 0
-    backend = run_repeated_click_flow(
-        points=points,
-        bounds=bounds,
-        backend_name=args.backend,
-        count=args.times,
-        between=BUSINESS_WAITS["patrol_ad_between"],
-        steps=(
-            ("quick_patrol", "patrol ad {index}/{count}: clicked watch-ad via {backend}", BUSINESS_WAITS["patrol_ad_start"]),
-            ("ad_close_top", "patrol ad {index}/{count}: clicked ad-close via {backend}", BUSINESS_WAITS["patrol_ad_close"]),
-            ("reward_dismiss", "patrol ad {index}/{count}: clicked reward-dismiss via {backend}", 0),
-        ),
-    )
+    backend = ""
+    for index in range(args.times):
+        backend = run_ad_reward_cycle(
+            start_point=points["quick_patrol"],
+            close_point=points["ad_close_top"],
+            dismiss_point=points["reward_dismiss"],
+            bounds=bounds,
+            backend_name=args.backend,
+            ad_wait=BUSINESS_WAITS["patrol_ad_start"],
+            close_wait=BUSINESS_WAITS["patrol_ad_close"],
+            start_click=perform_reward_click,
+            close_click=perform_reward_click,
+            dismiss_click=perform_dismiss_click,
+            sleep_fn=sleep_between,
+        )
+        print(f"patrol ad {index + 1}/{args.times}: completed shared ad reward cycle via {backend}", flush=True)
+        if index + 1 < args.times:
+            sleep_between(BUSINESS_WAITS["patrol_ad_between"])
     print(f"patrol ad batch complete: attempted {args.times} via {backend}")
     return 0
 def patrol_full_points(bounds: Bounds) -> Dict[str, Tuple[int, int]]:
@@ -79,15 +85,25 @@ def dismiss_reward_once(
     # 奖励弹窗关闭后不再补点同一坐标，避免第二击落到已恢复的游戏页面。
     """巡逻奖励：只点击一次关闭弹窗，避免重复点击落到后方游戏页面。"""
     if isinstance(args, dict):
-        backend = perform_dismiss_click(*args["reward_dismiss"], str(points), bounds)
+        backend = run_reward_claim_cycle(
+            claim_point=None,
+            dismiss_point=args["reward_dismiss"],
+            bounds=bounds,
+            backend_name=str(points),
+            claim_wait=0,
+            dismiss_click=perform_dismiss_click,
+        )
     else:
         assert isinstance(points, dict)
-        backend = _perform_event(
-            "patrol_reward_dismiss",
-            points["reward_dismiss"],
-            args,
-            bounds,
-            kind="dismiss",
+        backend = run_reward_claim_cycle(
+            claim_point=None,
+            dismiss_point=points["reward_dismiss"],
+            bounds=bounds,
+            backend_name=args.backend,
+            claim_wait=0,
+            dismiss_wait=BUSINESS_WAITS["patrol_reward_dismiss"],
+            dismiss_click=perform_dismiss_click,
+            sleep_fn=sleep_between,
         )
     print(f"{label}: clicked reward-dismiss once via {backend}", flush=True)
     # 旧的冗余第二次点击保留作校准记录；如日后弹窗行为变化，可据此恢复。
@@ -181,17 +197,24 @@ def command_patrol_full_from_home(args: argparse.Namespace) -> int:
             )
     if "ad_patrol" in tasks:
         for idx in range(args.ad_times):
-            backend = _perform_event("patrol_ad_start", points["quick_patrol"], args, bounds)
-            print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked watch-ad via {backend}", flush=True)
-            backend = _perform_event("patrol_ad_close", points["ad_close_top"], args, bounds)
-            print(f"patrol full ad {idx + 1}/{args.ad_times}: clicked ad-close-top via {backend}", flush=True)
-            ensure_game_ready_after_ad(bounds)
-            backend = dismiss_reward_once(
-                args,
-                points,
-                bounds,
-                label=f"patrol full ad {idx + 1}/{args.ad_times}",
+            backend = run_ad_reward_cycle(
+                start_point=points["quick_patrol"],
+                close_point=points["ad_close_top"],
+                dismiss_point=points["reward_dismiss"],
+                bounds=bounds,
+                backend_name=args.backend,
+                ad_wait=BUSINESS_WAITS["patrol_ad_start"],
+                close_wait=BUSINESS_WAITS["patrol_ad_close"],
+                ensure_ready=True,
+                start_click=perform_click,
+                close_click=perform_click,
+                dismiss_click=perform_dismiss_click,
+                sleep_fn=sleep_between,
+                readiness_fn=ensure_game_ready_after_ad,
             )
+            # 完整巡逻原有的奖励关闭后业务等待为 0.3 秒，保留该时序。
+            sleep_between(BUSINESS_WAITS["patrol_reward_dismiss"])
+            print(f"patrol full ad {idx + 1}/{args.ad_times}: completed shared ad reward cycle via {backend}", flush=True)
     backend = _perform_event("patrol_close", points["patrol_close"], args, bounds)
     print(
         f"patrol full complete: attempted {selection.remaining}; "

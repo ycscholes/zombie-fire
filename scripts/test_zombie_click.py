@@ -29,7 +29,138 @@ class LegionJourneyGiftsTests(unittest.TestCase):
         with patch.dict(zombie_click.ACTIONS, fixture), patch.object(zombie_click, "prepare_command_bounds", return_value=bounds), patch.object(zombie_click, "perform_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_tab_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_reward_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "perform_dismiss_click", side_effect=lambda x,y,*_: events.append((x,y)) or "mock"), patch.object(zombie_click, "sleep_between", side_effect=lambda value: events.append(("wait", value))):
             self.assertEqual(zombie_click.command_legion_journey_gifts(args), 0)
             point = lambda name: zombie_click.scale_point(fixture[name], bounds)
-            self.assertEqual(events, [point(names[0]), ("wait", .5), point(names[1]), ("wait", .5), point(names[2]), point(names[3])])
+            self.assertEqual(
+                events,
+                [
+                    point(names[0]), ("wait", .5), point(names[1]), ("wait", .5),
+                    point(names[2]), point(names[3]), point("back_bottom_left"),
+                ],
+            )
+
+
+class ArmedDescentTests(unittest.TestCase):
+    def test_armed_descent_requires_all_current_run_gates_before_clicking(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "armed-descent"]
+        )
+        with patch.object(zombie_click._armed, "perform_click") as click:
+            self.assertEqual(zombie_click._armed.command_armed_descent(args), 0)
+        click.assert_not_called()
+
+    def test_armed_descent_uses_only_the_confirmed_task_claim_count(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "armed-descent", "--skip-animation-state", "checked", "--free-draw-state", "claimed", "--task-claims", "2"]
+        )
+        bounds = zombie_click.Bounds("mock", "mock", 2, 33, 508, 949)
+        events = []
+        with (
+            patch.object(zombie_click._armed, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click._armed, "perform_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "perform_tab_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "perform_reward_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "perform_dismiss_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "sleep_between", side_effect=lambda _: None),
+        ):
+            self.assertEqual(zombie_click._armed.command_armed_descent(args), 0)
+        first_claim_point = zombie_click.scale_point(zombie_click.ACTIONS["armed_task_claim_first"], bounds)
+        self.assertEqual(events.count(first_claim_point), 2)
+        self.assertNotIn(zombie_click.scale_point(zombie_click.ACTIONS["armed_skip_animation"], bounds), events)
+        self.assertNotIn(zombie_click.scale_point(zombie_click.ACTIONS["armed_free_draw_ad"], bounds), events)
+
+    def test_failed_ad_return_stops_before_reward_dismiss_or_task_claims(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "armed-descent", "--skip-animation-state", "checked", "--free-draw-state", "available", "--task-claims", "1"]
+        )
+        bounds = zombie_click.Bounds("mock", "mock", 2, 33, 508, 949)
+        events = []
+        with (
+            patch.object(zombie_click._armed, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click._armed, "perform_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "perform_reward_click", side_effect=lambda x, y, *_: events.append((x, y)) or "mock"),
+            patch.object(zombie_click._armed, "perform_dismiss_click") as dismiss,
+            patch.object(zombie_click._armed, "sleep_between"),
+            patch.object(zombie_click._armed, "ensure_game_ready_after_ad", side_effect=zombie_click.AdReturnError("ad did not return")),
+        ):
+            with self.assertRaisesRegex(zombie_click.AdReturnError, "ad did not return"):
+                zombie_click._armed.command_armed_descent(args)
+        dismiss.assert_not_called()
+        self.assertNotIn(zombie_click.scale_point(zombie_click.ACTIONS["armed_tasks"], bounds), events)
+
+    def test_confirmed_unchecked_available_flow_clicks_in_seven_step_order_once(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "armed-descent", "--skip-animation-state", "unchecked", "--free-draw-state", "available", "--task-claims", "1"]
+        )
+        bounds = zombie_click.Bounds("mock", "mock", 2, 33, 508, 949)
+        events = []
+        def record(kind):
+            return lambda x, y, *_: events.append((kind, (x, y))) or "mock"
+        with (
+            patch.object(zombie_click._armed, "prepare_command_bounds", return_value=bounds),
+            patch.object(zombie_click._armed, "perform_click", side_effect=record("click")),
+            patch.object(zombie_click._armed, "perform_tab_click", side_effect=record("tab")),
+            patch.object(zombie_click._armed, "perform_reward_click", side_effect=record("reward")),
+            patch.object(zombie_click._armed, "perform_dismiss_click", side_effect=record("dismiss")),
+            patch.object(zombie_click._armed, "sleep_between"),
+            patch.object(zombie_click._armed, "ensure_game_ready_after_ad"),
+        ):
+            self.assertEqual(zombie_click._armed.command_armed_descent(args), 0)
+        p = lambda name: zombie_click.scale_point(zombie_click.ACTIONS[name], bounds)
+        self.assertEqual(
+            events,
+            [
+                ("click", p("armed_descent_entry")), ("click", p("armed_skip_animation")),
+                ("reward", p("armed_free_draw_ad")), ("click", p("ad_close_top")),
+                ("dismiss", p("reward_dismiss")), ("click", p("armed_tasks")),
+                ("reward", p("armed_task_claim_first")), ("dismiss", p("reward_dismiss")),
+                ("click", p("armed_tasks_close")), ("tab", p("armed_arsenal_tab")),
+                ("reward", p("armed_arsenal_claim")), ("dismiss", p("reward_dismiss")),
+                ("click", p("back_bottom_left")),
+            ],
+        )
+
+    def test_daily_keeps_legacy_step_two_on_calendar_and_skips_unconfigured_armed_phase(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "daily-rewards", "--from-step", "2", "--dry-run"]
+        )
+        phases = []
+        with (
+            patch.object(zombie_click, "command_patrol_full_from_home") as patrol,
+            patch.object(zombie_click, "command_calendar_claim", side_effect=lambda _: phases.append("calendar")),
+            patch.object(zombie_click, "command_welfare_claim", side_effect=lambda _: phases.append("welfare")),
+            patch("builtins.print") as output,
+        ):
+            self.assertEqual(zombie_click.command_daily_rewards(args), 0)
+        patrol.assert_not_called()
+        self.assertEqual(phases, ["calendar", "welfare"])
+        self.assertIn("armed_descent=skipped", "\n".join(str(call.args[0]) for call in output.call_args_list))
+
+    def test_daily_runs_mechanical_shock_then_pass_and_gated_rewards_after_patrol(self) -> None:
+        args = zombie_click.build_parser().parse_args(
+            ["--mock-bounds", "2,33,508,949", "daily-rewards", "--mechanical-shock-skip-animation-state", "checked", "--mechanical-shock-task-claims", "0", "--mechanical-shock-mech-fight-claim-state", "claimed", "--pass-free-claim-state", "claimed", "--pass-work-plan-sign-state", "claimed", "--armed-skip-animation-state", "checked", "--armed-free-draw-state", "claimed", "--armed-task-claims", "0", "--mimic-skip-animation-state", "checked", "--mimic-free-draw-state", "claimed", "--mimic-task-claims", "0", "--mimic-one-click-claim-state", "claimed", "--dry-run"]
+        )
+        phases = []
+        handlers = (
+            ("command_patrol_full_from_home", "patrol"), ("command_mechanical_shock", "mechanical_shock"),
+            ("command_battle_pass_daily", "battle_pass"),
+            ("command_armed_descent", "armed_descent"),
+            ("command_mimic_card_library", "mimic_card_library"),
+            ("command_calendar_claim", "calendar"), ("command_welfare_claim", "welfare"),
+            ("command_mail_claim", "mail"), ("command_legion_daily_rewards", "legion"),
+            ("command_journey_daily_rewards", "journey"), ("command_base_training_hall", "base"),
+            ("command_shop_training_hall", "shop"),
+        )
+        patches = [patch.object(zombie_click, name, side_effect=lambda _, value=value: phases.append(value)) for name, value in handlers]
+        for item in patches:
+            item.start()
+        try:
+            self.assertEqual(zombie_click.command_daily_rewards(args), 0)
+        finally:
+            for item in reversed(patches):
+                item.stop()
+        self.assertEqual(
+            phases[:6],
+            ["patrol", "mechanical_shock", "battle_pass", "armed_descent", "mimic_card_library", "calendar"],
+        )
 
 
 class BaseTrainingHallTests(unittest.TestCase):
@@ -1286,12 +1417,24 @@ class FocusEligibilityTests(unittest.TestCase):
             [point("welfare_entry"), point("welfare_reward_popup_dismiss"), point("back_bottom_left")],
         )
 
-    def test_daily_rewards_runs_all_eight_phases_in_order_with_shared_bounds(self) -> None:
+    def test_daily_rewards_runs_all_twelve_phases_in_order_with_shared_bounds(self) -> None:
         args = argparse.Namespace(
             mock_bounds=None,
             fit=True,
             dry_run=False,
             backend="cgclick",
+            mechanical_shock_skip_animation_state="checked",
+            mechanical_shock_task_claims=0,
+            mechanical_shock_mech_fight_claim_state="claimed",
+            pass_free_claim_state="claimed",
+            pass_work_plan_sign_state="claimed",
+            armed_skip_animation_state="checked",
+            armed_free_draw_state="claimed",
+            armed_task_claims=0,
+            mimic_skip_animation_state="checked",
+            mimic_free_draw_state="claimed",
+            mimic_task_claims=0,
+            mimic_one_click_claim_state="claimed",
         )
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         phases: list[tuple[str, zombie_click.Bounds]] = []
@@ -1303,6 +1446,26 @@ class FocusEligibilityTests(unittest.TestCase):
                 zombie_click,
                 "command_patrol_full_from_home",
                 side_effect=lambda phase_args: phases.append(("patrol", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
+                "command_battle_pass_daily",
+                side_effect=lambda phase_args: phases.append(("battle_pass", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
+                "command_mechanical_shock",
+                side_effect=lambda phase_args: phases.append(("mechanical_shock", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
+                "command_armed_descent",
+                side_effect=lambda phase_args: phases.append(("armed_descent", phase_args.mock_bounds)),
+            ),
+            patch.object(
+                zombie_click,
+                "command_mimic_card_library",
+                side_effect=lambda phase_args: phases.append(("mimic_card_library", phase_args.mock_bounds)),
             ),
             patch.object(
                 zombie_click,
@@ -1344,7 +1507,12 @@ class FocusEligibilityTests(unittest.TestCase):
 
         self.assertEqual(
             phases,
-            [("patrol", bounds), ("calendar", bounds), ("welfare", bounds), ("mail", bounds), ("legion", bounds), ("journey", bounds), ("base", bounds), ("shop", bounds)],
+            [
+                ("patrol", bounds), ("mechanical_shock", bounds), ("battle_pass", bounds), ("armed_descent", bounds),
+                ("mimic_card_library", bounds), ("calendar", bounds), ("welfare", bounds),
+                ("mail", bounds), ("legion", bounds), ("journey", bounds),
+                ("base", bounds), ("shop", bounds),
+            ],
         )
         bind_session.assert_called_once_with(bounds)
 

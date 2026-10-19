@@ -905,6 +905,64 @@ def run_repeated_click_flow(
     return backend
 
 
+def run_ad_reward_cycle(
+    *,
+    start_point: tuple[int, int],
+    close_point: tuple[int, int],
+    dismiss_point: tuple[int, int],
+    bounds: Bounds,
+    backend_name: str,
+    ad_wait: float,
+    close_wait: float,
+    ensure_ready: bool = False,
+    start_click=None,
+    close_click=None,
+    dismiss_click=None,
+    sleep_fn=None,
+    readiness_fn=None,
+) -> str:
+    """共享广告奖励原语：观看一次、关闭广告、可选检查回到游戏、关闭奖励，绝不重试。"""
+    start = start_click or perform_reward_click
+    close = close_click or perform_click
+    dismiss = dismiss_click or perform_dismiss_click
+    wait = sleep_fn or sleep_between
+    ready = readiness_fn or ensure_game_ready_after_ad
+    start(start_point[0], start_point[1], backend_name, bounds)
+    if ad_wait > 0:
+        wait(ad_wait)
+    backend = close(close_point[0], close_point[1], backend_name, bounds)
+    if close_wait > 0:
+        wait(close_wait)
+    if ensure_ready:
+        ready(bounds)
+    return dismiss(dismiss_point[0], dismiss_point[1], backend_name, bounds)
+
+
+def run_reward_claim_cycle(
+    *,
+    claim_point: tuple[int, int] | None,
+    dismiss_point: tuple[int, int],
+    bounds: Bounds,
+    backend_name: str,
+    claim_wait: float,
+    dismiss_wait: float = 0,
+    claim_click=None,
+    dismiss_click=None,
+    sleep_fn=None,
+) -> str:
+    """共享领奖原语：至多领取一次，等待刷新后关闭一次奖励弹窗。"""
+    if claim_point is not None:
+        (claim_click or perform_reward_click)(claim_point[0], claim_point[1], backend_name, bounds)
+        if claim_wait > 0:
+            (sleep_fn or sleep_between)(claim_wait)
+    result = (dismiss_click or perform_dismiss_click)(
+        dismiss_point[0], dismiss_point[1], backend_name, bounds
+    )
+    if dismiss_wait > 0:
+        (sleep_fn or sleep_between)(dismiss_wait)
+    return result
+
+
 def focus_game_window(bounds: Bounds) -> None:
     """Focus the game immediately before a click and preserve calibration."""
     focused = focus_game_window_at_start(expected_bounds=bounds)

@@ -16,16 +16,20 @@ from scripts import zombie_common as _common
 from scripts.zombie_common import *
 from scripts.zombie_actions import *
 from scripts.zombie_tasks import base as _base
+from scripts.zombie_tasks import battle_pass as _battle_pass
+from scripts.zombie_tasks import armed as _armed
 from scripts.zombie_tasks import daily as _daily
 from scripts.zombie_tasks import home as _home
 from scripts.zombie_tasks import journey as _journey
 from scripts.zombie_tasks import legion as _legion
+from scripts.zombie_tasks import mimic as _mimic
+from scripts.zombie_tasks import mechanical_shock as _mechanical_shock
 from scripts.zombie_tasks import patrol as _patrol
 from scripts.zombie_tasks.resume import DAILY_TASK_IDS, LOCAL_TASK_IDS, task_entry_help
 from scripts.zombie_tasks import shop as _shop
 
 
-_TASK_MODULES = (_base, _daily, _home, _journey, _legion, _patrol, _shop)
+_TASK_MODULES = (_armed, _base, _battle_pass, _daily, _home, _journey, _legion, _mechanical_shock, _mimic, _patrol, _shop)
 _TASK_HANDLERS = {
     "command_base_training_hall": _base.command_base_training_hall,
     "command_base_training_hall_deep_abyss": _base.command_base_training_hall_deep_abyss,
@@ -36,6 +40,10 @@ _TASK_HANDLERS = {
     "command_base_training_hall_element_trial": _base.command_base_training_hall_element_trial,
     "command_base_training_hall_shop": _base.command_base_training_hall_shop,
     "command_daily_rewards": _daily.command_daily_rewards,
+    "command_battle_pass_daily": _battle_pass.command_battle_pass_daily,
+    "command_armed_descent": _armed.command_armed_descent,
+    "command_mechanical_shock": _mechanical_shock.command_mechanical_shock,
+    "command_mimic_card_library": _mimic.command_mimic_card_library,
     "command_calendar_claim": _home.command_calendar_claim,
     "command_mail_claim": _home.command_mail_claim,
     "command_welfare_claim": _home.command_welfare_claim,
@@ -60,6 +68,7 @@ _COMMON_BASE = {
         "fit_game_window", "ensure_unchanged_game_window", "focus_game_window",
         "focus_game_window_at_start", "perform_click", "perform_dismiss_click", "perform_reward_click", "perform_tab_click", "perform_action", "perform_drag", "drag_cgclick_bin",
         "sleep_between", "ensure_game_ready_after_ad",
+        "run_ad_reward_cycle", "run_reward_claim_cycle",
     )
 }
 _TASK_DEPENDENCIES = (
@@ -67,6 +76,7 @@ _TASK_DEPENDENCIES = (
     "scale_point", "ensure_game_ready_after_ad", "focus_game_window", "perform_drag", "drag_cgclick_bin",
     "ACTIONS", "Bounds", "set_phase_state", "PhaseProgress", "PhaseResult",
     "recover_phase",
+    "run_ad_reward_cycle", "run_reward_claim_cycle",
 )
 
 
@@ -89,6 +99,7 @@ def _sync_task_compat(module: object) -> None:
         "fit_game_window",
         "ensure_unchanged_game_window", "focus_game_window", "focus_game_window_at_start",
         "perform_click", "perform_dismiss_click", "perform_reward_click", "perform_tab_click", "perform_action", "perform_drag", "sleep_between", "ensure_game_ready_after_ad", "drag_cgclick_bin",
+        "run_ad_reward_cycle", "run_reward_claim_cycle",
     ):
         value = globals().get(name)
         if hasattr(module, name) and value is not None and type(value).__module__.startswith("unittest.mock"):
@@ -111,6 +122,10 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
         for dependency in common_names
         if hasattr(module, dependency)
     }
+    base_previous = (
+        {dependency: getattr(_base, dependency) for dependency in _TASK_DEPENDENCIES if hasattr(_base, dependency)}
+        if module is _battle_pass else {}
+    )
     common_previous = {}
     for dependency in common_names:
         value = globals().get(dependency)
@@ -122,11 +137,13 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
         # Only a test-time monkeypatch should cross this boundary; syncing the
         # wrapper itself back into the task creates wrapper -> wrapper recursion.
         if (
-            module is _base
+            module in {_base, _battle_pass}
             and scroll_override is not None
             and type(scroll_override).__module__.startswith("unittest.mock")
         ):
             module.scroll_to_bottom = scroll_override
+        if module is _battle_pass:
+            _sync_task_compat(_base)
         _sync_task_compat(module)
         return _TASK_HANDLERS[name](args)
     finally:
@@ -140,6 +157,8 @@ def _task_call(module: object, name: str, args: argparse.Namespace) -> int:
             setattr(_common, dependency, value)
         for dependency, value in _COMMON_BASE.items():
             setattr(_common, dependency, value)
+        for dependency, value in base_previous.items():
+            setattr(_base, dependency, value)
 
 
 # 基地每日任务：领取食堂奖励，依次执行训练大厅各挑战和玩法商店购买。
@@ -158,8 +177,16 @@ def command_base_training_hall_battlefield_contest(args): return _task_call(_bas
 def command_base_training_hall_element_trial(args): return _task_call(_base, "command_base_training_hall_element_trial", args)
 # 玩法商店：从训练大厅进入，购买强化剂、枪械图纸和基建耗材后关闭商店。
 def command_base_training_hall_shop(args): return _task_call(_base, "command_base_training_hall_shop", args)
-# 每日奖励总任务：在同一游戏窗口内依次执行八个阶段，支持从指定阶段继续。
+# 每日奖励总任务：依次执行十二个阶段，保留旧 from-step 映射并支持按任务继续。
 def command_daily_rewards(args): return _task_call(_daily, "command_daily_rewards", args)
+# 通行证：按本次确认领取绿色免费一键奖励和当天作战计划直免签到后返回首页。
+def command_battle_pass_daily(args): return _task_call(_battle_pass, "command_battle_pass_daily", args)
+# 武装降临：仅按本次确认的动画、免费广告和任务可领奖数 gate 执行七步。
+def command_armed_descent(args): return _task_call(_armed, "command_armed_descent", args)
+# 机械震荡：按本次页面确认的动画、任务首行数和机甲械斗奖励 gate 执行。
+def command_mechanical_shock(args): return _task_call(_mechanical_shock, "command_mechanical_shock", args)
+# 拟态牌库：按本次确认的动画、免费抽取、任务可领奖数和红点奖励状态领取免费奖励。
+def command_mimic_card_library(args): return _task_call(_mimic, "command_mimic_card_library", args)
 # 日历：领取当前可见的免费礼包后返回首页。
 def command_calendar_claim(args): return _task_call(_home, "command_calendar_claim", args)
 # 邮件：打开右上角菜单，一键领取邮件奖励后关闭邮件和菜单。
@@ -500,6 +527,42 @@ def build_parser() -> argparse.ArgumentParser:
     patrol_full_parser.add_argument("--dry-run", action="store_true", help="print planned points without clicking or sleeping")
     patrol_full_parser.set_defaults(func=command_patrol_full_from_home)
 
+    # 武装降临：gate 必须来自本次 Computer Use 页面确认；无 gate 时任务安全跳过。
+    armed_parser = sub.add_parser("armed-descent", help="按已确认 gate 执行武装降临七步免费奖励")
+    armed_parser.add_argument("--skip-animation-state", choices=("checked", "unchecked"))
+    armed_parser.add_argument("--free-draw-state", choices=("available", "claimed"))
+    armed_parser.add_argument("--task-claims", type=int, help="本次确认当前首行可领取的连续条数，可为 0")
+    armed_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    armed_parser.add_argument("--dry-run", action="store_true", help="打印执行计划，不点击或等待")
+    armed_parser.set_defaults(func=command_armed_descent)
+
+    # 机械震荡独立入口：三项状态必须来自本次页面观察，任务首行最多确认三条。
+    mechanical_shock_parser = sub.add_parser("mechanical-shock", help="按本次确认 gate 执行机械震荡每日奖励")
+    mechanical_shock_parser.add_argument("--mechanical-shock-skip-animation-state", choices=("checked", "unchecked"))
+    mechanical_shock_parser.add_argument("--mechanical-shock-task-claims", type=int, help="本次确认当前首行可领取的连续条数，范围 0 到 3")
+    mechanical_shock_parser.add_argument("--mechanical-shock-mech-fight-claim-state", choices=("available", "claimed"), help="机甲械斗页一键领取状态的本次观察")
+    mechanical_shock_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    mechanical_shock_parser.add_argument("--dry-run", action="store_true", help="打印执行计划，不点击或等待")
+    mechanical_shock_parser.set_defaults(func=command_mechanical_shock)
+
+    # 通行证独立入口：两个领取按钮分别要求本次页面观察，缺失状态时不点击对应按钮。
+    pass_parser = sub.add_parser("battle-pass-daily", help="按本次确认领取通行证免费奖励和当天作战计划签到")
+    pass_parser.add_argument("--free-claim-state", choices=("available", "claimed"), help="通行证绿色一键领取状态的本次页面观察")
+    pass_parser.add_argument("--work-plan-sign-state", choices=("available", "claimed"), help="当天作战计划直免签到状态的本次页面观察")
+    pass_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    pass_parser.add_argument("--dry-run", action="store_true", help="打印当天签到计划，不点击或等待")
+    pass_parser.set_defaults(func=command_battle_pass_daily)
+
+    # 独立拟态牌库入口：每次运行都要求显式传入四项当前页面观察值。
+    mimic_parser = sub.add_parser("mimic-card-library", help="按本次确认执行拟态牌库免费奖励任务")
+    mimic_parser.add_argument("--mimic-skip-animation-state", choices=("checked", "unchecked"))
+    mimic_parser.add_argument("--mimic-free-draw-state", choices=("available", "claimed"))
+    mimic_parser.add_argument("--mimic-task-claims", type=int, help="本次确认当前首行可领取的连续条数，可为 0")
+    mimic_parser.add_argument("--mimic-one-click-claim-state", choices=("available", "claimed"), help="拟态牌库红点页一键奖励的本次观察状态")
+    mimic_parser.add_argument("--backend", choices=CLICK_BACKENDS, default="auto")
+    mimic_parser.add_argument("--dry-run", action="store_true", help="打印执行计划，不点击或等待")
+    mimic_parser.set_defaults(func=command_mimic_card_library)
+
     patrol_ads_home_parser = sub.add_parser(
         "patrol-ads-from-home",
         help="open patrol from home and run patrol watch-ad cycles without screenshots",
@@ -660,7 +723,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     daily_parser = sub.add_parser(
         "daily-rewards",
-        help="run all eight daily phases with one checked game window",
+        help="run all twelve daily phases with one checked game window",
     )
     daily_parser.add_argument("--fit", action=argparse.BooleanOptionalAction, default=True)
     daily_resume = daily_parser.add_mutually_exclusive_group()
@@ -670,8 +733,20 @@ def build_parser() -> argparse.ArgumentParser:
         choices=range(1, 9),
         default=1,
         metavar="N",
-        help="resume at phase 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, 6=journey, 7=base training hall, or 8=shop training hall",
+        help="legacy resume numbering: 1=patrol, 2=calendar, 3=welfare, 4=mail, 5=legion, 6=journey, 7=base training hall, 8=shop training hall",
     )
+    daily_parser.add_argument("--armed-skip-animation-state", choices=("checked", "unchecked"), help="this-run Computer Use confirmation for the animation checkbox")
+    daily_parser.add_argument("--armed-free-draw-state", choices=("available", "claimed"), help="this-run Computer Use confirmation for the once-daily free draw")
+    daily_parser.add_argument("--armed-task-claims", type=int, help="this-run count of consecutive claimable first rows confirmed in the task list")
+    daily_parser.add_argument("--mechanical-shock-skip-animation-state", choices=("checked", "unchecked"), help="机械震荡动画复选框的本次观察状态")
+    daily_parser.add_argument("--mechanical-shock-task-claims", type=int, help="机械震荡本次确认当前首行可领取的连续条数，范围 0 到 3")
+    daily_parser.add_argument("--mechanical-shock-mech-fight-claim-state", choices=("available", "claimed"), help="机甲械斗页一键领取状态的本次观察")
+    daily_parser.add_argument("--pass-free-claim-state", choices=("available", "claimed"), help="通行证绿色一键领取状态的本次页面观察")
+    daily_parser.add_argument("--pass-work-plan-sign-state", choices=("available", "claimed"), help="当天作战计划直免签到状态的本次页面观察")
+    daily_parser.add_argument("--mimic-skip-animation-state", choices=("checked", "unchecked"), help="拟态牌库动画复选框的本次观察状态")
+    daily_parser.add_argument("--mimic-free-draw-state", choices=("available", "claimed"), help="拟态牌库每日免费抽取的本次观察状态")
+    daily_parser.add_argument("--mimic-task-claims", type=int, help="拟态牌库本次确认当前首行可领取的连续条数")
+    daily_parser.add_argument("--mimic-one-click-claim-state", choices=("available", "claimed"), help="拟态牌库红点页一键奖励的本次观察状态")
     daily_resume.add_argument(
         "--from-task",
         choices=DAILY_TASK_IDS,

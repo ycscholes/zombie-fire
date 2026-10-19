@@ -20,6 +20,7 @@ python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mo
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards --from-step 3
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py --mock-bounds 2,33,508,949 daily-rewards --dry-run
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mechanical-shock
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-quick-batch --times 3
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-batch
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py patrol-ads-from-home --times 5
@@ -108,8 +109,8 @@ atomic click action.
   visible reward popup, an explicit completion state, or a count decrement seen
   at the next required verification point.
 - For a standard daily run, prefer this low-token order after the startup gate:
-  patrol -> calendar -> welfare cluster -> shop inspection -> battle pass /
-  work-plan sign-in -> legion. Capture once per entered surface, then use fixed
+  patrol -> gated 机械震荡 -> battle pass / work-plan sign-in -> gated 武装降临 ->
+  gated 拟态牌库 -> calendar -> welfare cluster -> shop inspection -> legion. Capture once per entered surface, then use fixed
   clicks for known free claim buttons and reward dismissal. In legion, capture
   at most once on the legion hub and once on the foreign-challenge page unless a
   verified free reward is already open.
@@ -123,7 +124,44 @@ atomic click action.
 ## Safety
 
 - Claim only free rewards.
-- Watch ads only for patrol-truck `观看广告`; skip all other ad/video rewards.
+- Watch ads for patrol-truck `观看广告`. The explicitly authorized 武装降临
+  and 拟态牌库 `免费抽取` buttons are the only additional exceptions: use
+  each at most once and only when this-run Computer Use confirms availability.
+  Each exception is authorized by its task request; do not ask the user to
+  confirm each daily run.
+- Before running 武装降临, use Computer Use on the current page to confirm the
+  animation checkbox state, free-draw state, and number of currently claimable
+  task rows. Pass these observations as `--skip-animation-state`,
+  `--free-draw-state`, and `--task-claims`; for `daily-rewards`, use the
+  `--armed-` prefixed forms. For direct CLI use, these are explicit per-run
+  evidence gates; missing values skip the phase. In the App, the saved form
+  defaults are `checked`, `available`, and 3, so compare them with the current
+  page and edit the shared command parameter before live execution when needed.
+- The task list rearranges after claims. Each confirmed claim click targets the
+  current first claim row, waits for refresh, and dismisses its reward before
+  the next click. Never treat the task count as a fixed row map.
+- The free-draw ad button becomes a coupon-cost draw after success. Click it at
+  most once, wait 33 seconds, close through the calibrated top ad close, check
+  that the game returned, then dismiss the reward. Never retry the draw button.
+- For 拟态牌库, pass this-run observations as
+  `--mimic-skip-animation-state`, `--mimic-free-draw-state`, and
+  `--mimic-task-claims`, plus `--mimic-one-click-claim-state` for the red-dot
+  reward page, including with `daily-rewards`. Missing CLI values safely
+  skip this phase and make the daily result `partial`; the App form defaults
+  are checked/available/3 and must be compared with the current page. The task claims only the
+  confirmed number of current first task rows, dismisses each reward, then
+  opens the top-right reward page and uses its green free one-click button;
+  never click adjacent paid choices.
+- For 机械震荡, pass this-run observations as
+  `--mechanical-shock-skip-animation-state`, `--mechanical-shock-task-claims`
+  (0 through 3), and `--mechanical-shock-mech-fight-claim-state`. Missing CLI
+  values safely skip this phase and make the daily result `partial`; the App
+  form defaults are checked/available/3 and must be compared with the current
+  page. Click the animation
+  box only when it is currently unchecked, claim only the confirmed current
+  first task rows, and use the mech-fight one-click claim only when it is
+  currently available. Close the task list, open the bottom-right 机甲械斗 tab,
+  then use `back_bottom_left` to return to game Home.
 - On the verified patrol panel, `快速巡逻 x5` is the normal free quick-patrol
   button state, not a paid/currency cost. This exception applies only after the
   patrol panel is visible and the quick-patrol count is shown.
@@ -132,9 +170,9 @@ atomic click action.
 - Red dots are hints, not proof that the next action is safe.
 - Never enter legion `任务大厅`, `军团捐献`, `玩法大厅`, or `军团大厅`.
 - Welfare: never do补签.
-- Before any action that could spend currency, open an ad outside patrol, or
-  claim a commercial offer, re-check with Computer Use. If still uncertain,
-  skip instead of probing.
+- Before any action that could spend currency, open an ad other than the
+  explicitly authorized 武装降临 or 拟态牌库 free draws, or claim a commercial offer,
+  re-check with Computer Use. If still uncertain, skip instead of probing.
 
 ## Start And Recovery
 
@@ -182,7 +220,8 @@ atomic click action.
   next meaningful count, reward popup, or completion point. For patrol ads,
   default to the helper's `patrol-ads-batch` command after confirming the panel
   shows `观看广告`; do not screenshot inside the batch.
-- Tier 2: paid, commercial, currency, non-patrol ad, or ambiguous surfaces.
+- Tier 2: paid, commercial, currency, non-patrol ads other than the explicitly
+  authorized 武装降临 and 拟态牌库 free draws, or ambiguous surfaces.
   Re-capture immediately before the action. Click only when the visible button
   is direct-free and safe; otherwise skip.
 
@@ -216,24 +255,121 @@ Legacy patrol subcommands remain available for recovery or partial reruns:
 requests a partial patrol action or the full command is not appropriate. Never
 click the quick-patrol `+`.
 
+## Armed Descent
+
+Use this route only with the three current-run Computer Use gates described in
+Safety. Example standalone command:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py armed-descent --skip-animation-state checked --free-draw-state available --task-claims 2
+```
+
+The command follows the calibrated route: enter 武装降临 from Home; click the
+skip-animation checkbox only when the observed state is unchecked; claim the
+available free ad once, wait 33 seconds, close the ad, verify return to the
+game, and dismiss its reward; open tasks and repeat the current first claim row
+only for the confirmed count, waiting for refresh and dismissing each reward;
+close the task modal; open 武库 and use its one-click free claim; dismiss that
+reward; return Home with the bottom-left back action. After success the free
+draw button changes to a coupon-cost draw. `claimed` suppresses the ad click;
+never retry the draw button.
+
+The shared ad and reward primitives live in `scripts/zombie_common.py`:
+`run_ad_reward_cycle` handles the one-shot ad, return check, and reward
+dismissal; `run_reward_claim_cycle` handles one claim, refresh wait, and one
+dismissal. Patrol routes use these same primitives with patrol-specific waits.
+
+## Mimic Card Library
+
+For direct CLI use, pass four current-run Computer Use observations; do not
+reuse values observed in an earlier run:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mimic-card-library --mimic-skip-animation-state unchecked --mimic-free-draw-state available --mimic-task-claims 2 --mimic-one-click-claim-state available
+```
+
+The task enters 拟态牌库 from Home; clicks the animation checkbox only if the
+current observation says unchecked; optionally runs the once-daily free ad
+draw; and opens the task panel. It claims only the confirmed count from the
+current first row, waiting for refresh and dismissing each reward before the
+next claim. It then closes the task panel, opens the top-right red-dot reward
+page, clicks the green free one-click claim only when its current-run state is
+`available`, and returns with two bottom-left back actions. The free draw uses
+`run_ad_reward_cycle`; task-row and red-dot
+rewards use `run_reward_claim_cycle`. If a click fails while the visible page
+is known, the daily runner uses that page's calibrated return path; an error
+during an ad or claim popup stops later phases when the page is uncertain.
+
+## Mechanical Shock
+
+Use this route with all three current-run page observations:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py mechanical-shock --mechanical-shock-skip-animation-state unchecked --mechanical-shock-task-claims 2 --mechanical-shock-mech-fight-claim-state claimed
+```
+
+The example values must match the current page; they are not remembered defaults.
+The task enters 机械震荡 from Home, clicks the skip-animation box only when the
+current observation says unchecked, and opens the task list. It claims only the
+confirmed count (0 through 3) from the current first row, using one shared
+reward cycle per row, then closes the task modal. It opens the bottom-right
+机甲械斗 tab and uses the one-click claim only when the current observation is
+`available`; `claimed` skips that click. Finally, it uses `back_bottom_left` to
+return to game Home. Daily mode accepts the same three gate flags and marks the
+run partial when the phase has to be skipped.
+
+## Battle Pass
+
+For direct CLI use, pass two current-run observations to the standalone
+command, or use their `--pass-` prefixed forms with `daily-rewards`:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py battle-pass-daily --free-claim-state available --work-plan-sign-state available
+```
+
+The task enters 通行证 from Home and clicks only the green free `一键领取` when
+`--free-claim-state available` is confirmed. It then enters 作战计划 and picks
+the sign-in row for the local weekday: Monday through Friday use the five
+row-specific actions, Saturday uses the existing `work_plan_sign` action, and
+Sunday first makes one downward-page scroll before using that same bottom-row
+action. `--work-plan-sign-state available` is required before it clicks; a
+missing gate skips only that click and marks the task partial, while `claimed`
+never clicks. Each successful claim uses the shared
+`run_reward_claim_cycle` before returning Home.
+
+The weekday rows use the current 508x949 page layout at x≈387 and y≈335, 435,
+535, 635, and 735 for Monday through Friday; Saturday reuses the existing
+`(387,844)` action. The Sunday scroll follows the left edge from `(63,840)` to
+`(63,740)` once, then targets `(387,844)`. These Sunday drag points are visual
+layout estimates from the current page, not live-validated helper behavior.
+Never click the ¥30/¥98 offers, ¥12 options, purple make-up sign-ins, or any
+other paid or ambiguous control.
+
 ## Combined Daily Rewards
 
-Use `daily-rewards` when the requested scope is exactly patrol, mail, and
-legion free rewards:
+Use `daily-rewards` for the full ordered daily routine:
 
 ```bash
 python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards
 ```
 
-It performs the complete patrol route, calendar free-gift claim, welfare free
-reward dismissal, mail claim, legion daily-rewards route, then the Journey
-gold/wood resource claim. The command
+It performs the complete patrol route, gated 机械震荡, 通行证, the gated 武装降临 and 拟态牌库
+routes, calendar free-gift claim, welfare free reward dismissal, mail claim,
+legion daily-rewards route, then the Journey gold/wood resource claim. The command
 validates and calibrates the game window once before the first action, then
-preserves those bounds for all eight phases.
+preserves those bounds for all twelve phases. Missing pass gates skip only the
+corresponding claim; missing mechanical-shock, armed, or mimic gates skip that phase. The run
+continues later phases and reports `partial` when a required gate is missing.
+These missing-gate rules describe direct CLI calls. The Desktop App sends its
+saved shared command parameters to the matching daily phases; its form defaults
+are documented above and should be checked against the current page before a
+live run.
 
 To resume a new run after a prior phase was recovered or stopped, pass
-`--from-step N`: `1=patrol`, `2=calendar`, `3=welfare`, `4=mail`, `5=legion`,
-`6=journey`, `7=base training hall`, and `8=shop training hall`. It marks earlier phases as `skipped`, then performs the usual
+`--from-step N`: the legacy mapping remains `1=patrol`, `2=calendar`,
+`3=welfare`, `4=mail`, `5=legion`, `6=journey`, `7=base training hall`, and
+`8=shop training hall`. 机械震荡, 通行证, 武装降临 and 拟态牌库 follow patrol
+only in the full run, in that order. It marks earlier phases as `skipped`, then performs the usual
 focus and calibration before the selected phase. It never infers prior progress
 or resumes a phase-internal click; choose a phase only after returning to its
 known safe boundary.
@@ -244,6 +380,10 @@ For a business-task boundary, use `--from-task ID`. The daily command accepts:
 | --- | --- |
 | `patrol.claim` | Home; this task opens the patrol panel |
 | `patrol.quick_patrol`, `patrol.ad_patrol` | Patrol panel |
+| `mechanical.shock` | Home; confirm the animation checkbox, claimable task count (0 through 3), and mech-fight one-click state, then pass all three `--mechanical-shock-*` gates |
+| `pass.daily` | Home; confirm the green one-click claim and today's direct-free sign-in state on the current pages |
+| `armed.descent` | Home; confirm the animation checkbox, free-draw state, and claimable task count with Computer Use, then pass all three `--armed-*` gates |
+| `mimic.card_library` | Home; confirm the animation checkbox, free-draw state, claimable task count, and red-dot one-click state with Computer Use, then pass all four `--mimic-*` gates |
 | `calendar`, `welfare`, `mail` | Home |
 | `legion.daily_cut`, `legion.foreign_rewards` | Home; these tasks open the Legion page |
 | `legion.shop_purchases`, `legion.journey_gifts` | Legion page |
@@ -260,6 +400,38 @@ daily phase. The summary reports skipped IDs and the remaining task suffix.
 `--from-step` and `--from-task` are mutually exclusive. CLI help lists the
 entry page for every accepted ID. A resume plan, including `--dry-run`, prints
 the selected ID's required entry page without clicking or dragging.
+
+To resume specifically at 机械震荡, 武装降临, or 拟态牌库, start from Home
+and pass that task's current Computer Use observations. 机械震荡 needs three
+gates, 武装降临 needs three, and 拟态牌库 needs four. For example:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards --from-task armed.descent --armed-skip-animation-state checked --armed-free-draw-state claimed --armed-task-claims 0
+```
+
+For 机械震荡, pass the three current observations:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards --from-task mechanical.shock --mechanical-shock-skip-animation-state checked --mechanical-shock-task-claims 0 --mechanical-shock-mech-fight-claim-state claimed
+```
+
+Use the standalone `armed-descent` command with the same gate values but
+without the `--armed-` prefixes. `mimic-card-library` requires its four
+`--mimic-*` gates both alone and in `daily-rewards`. An absent gate makes its
+phase skip safely; never supply a remembered or assumed state. The legacy
+`--from-step` numbering still maps 2 to calendar even though 拟态牌库 now runs
+between 武装降临 and calendar.
+
+To resume at 通行证, start from Home and use the current page observations:
+
+```bash
+python3 /Users/paul/.codex/skills/zombie-fire-daily/scripts/zombie_click.py daily-rewards --from-task pass.daily --pass-free-claim-state claimed --pass-work-plan-sign-state available
+```
+
+The standalone `battle-pass-daily` CLI command uses the same observations
+without the `--pass-` prefixes. If either CLI state is unknown, leave that gate
+empty so its click is skipped. The App uses its saved shared `available` form
+default, which is configuration and not evidence about the current screen.
 
 The independently runnable composite commands also accept local IDs:
 
@@ -290,7 +462,7 @@ visual proof of every reward claim. Game-window, login, geometry, failed
 cleanup, and an ad that does not return to the calibrated game remain fatal and
 stop the command without speculative clicks.
 
-Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all eight flows
+Use `--dry-run` with `--mock-bounds 2,33,508,949` to inspect all twelve flows
 without focusing a game window, clicking, or sleeping. It retains the existing
 defaults: three normal patrols, five patrol-ad attempts, and two legion sweeps.
 
