@@ -353,7 +353,7 @@ class BaseTrainingHallShopTests(unittest.TestCase):
         args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
         self.assertEqual(args.command, "base-training-hall-shop")
 
-    def test_play_shop_route_completes_three_purchases_without_skill_manual(self) -> None:
+    def test_play_shop_route_completes_four_purchases_including_skill_manual(self) -> None:
         args = zombie_click.build_parser().parse_args(["base-training-hall-shop"])
         bounds = zombie_click.Bounds("WeChat", "com.tencent.xinWeChat", 2, 33, 508, 949)
         events: list[object] = []
@@ -377,6 +377,9 @@ class BaseTrainingHallShopTests(unittest.TestCase):
             dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
             ("drag", "play_shop_tabs_drag_start", "play_shop_tabs_drag_end"), point("play_shop_element_tab"),
             point("play_shop_base_material"), point("play_shop_max"), point("play_shop_buy"),
+            dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
+            point("play_shop_legion_tab"), point("play_shop_skill_manual"),
+            point("play_shop_max"), point("play_shop_buy"),
             dismiss("play_shop_reward_dismiss"), point("play_shop_modal_close"),
             point("play_shop_close"),
         ])
@@ -405,6 +408,8 @@ class BaseTrainingHallShopTests(unittest.TestCase):
             "play_shop_tabs_drag_end": (145, 798),
             "play_shop_element_tab": (280, 798),
             "play_shop_base_material": (358, 644),
+            "play_shop_legion_tab": (390, 798),
+            "play_shop_skill_manual": (358, 500),
             "play_shop_max": (345, 566),
             "play_shop_buy": (252, 616),
             "play_shop_modal_close": (401, 350),

@@ -68,7 +68,7 @@ Composite commands accept these local task IDs:
 | `legion-reward-claims` | `sweeps`, `legion_rewards`, `personal_rewards` | Home; foreign-challenge page; Legion rewards panel, respectively |
 | `legion-shop-purchases` | `gun_blueprint`, `base_powder`, `enhancer` | Legion shop list scrolled to the selected item |
 | `legion-journey-gifts` | `gift_claim`, `expedition` | Legion page; Journey gift page, respectively |
-| `base-training-hall-shop` | `base_powder`, `gun_blueprint`, `base_materials` | Play shop at the selected item |
+| `base-training-hall-shop` | `base_powder`, `gun_blueprint`, `base_materials` | Play shop at the selected item; the skill manual follows `base_materials` |
 
 The CLI help and resume plan show the required entry page for each selected ID.
 The daily IDs are `patrol.claim`, `patrol.quick_patrol`, `patrol.ad_patrol`,
@@ -82,7 +82,8 @@ The daily IDs are `patrol.claim`, `patrol.quick_patrol`, `patrol.ad_patrol`,
 `legion-daily-rewards --from-task shop` and
 `base-training-hall --from-task element_trial`. A repeated task starts at its
 first iteration with the configured count; it cannot resume midway through a
-batch. The temporarily disabled play-shop skill-manual purchase has no task ID.
+batch. The play-shop random skill manual is purchased after base materials and
+shares that suffix; it has no independent task ID.
 
 `journey-purifier-recruit` is the standalone free-only purifier task. It clicks
 the current all-evolver 招募 button once without dragging or individually
@@ -104,8 +105,9 @@ from the open training-hall list and returns there. Battlefield Contest accepts
 `--battle-times` (default `5`). These commands reuse the composite route's
 actions; Terminal Crisis, Battlefield Contest, and Element Trial scroll to the
 bottom when needed. They do not replenish attempts or add purchase/ad actions.
-`base-training-hall-shop` starts from the already-open training hall and runs
-the enabled play-shop purchases: base powder, gun blueprint, and base materials.
+`base-training-hall-shop` starts from the already-open training hall and buys
+base powder, gun blueprint, base materials, then the random skill manual from
+the Legion tab. Every item uses the existing maximum-quantity purchase flow.
 
 ## Coordinate mapping
 

@@ -475,7 +475,8 @@ For example, use `legion-daily-rewards --from-task shop` or
 `base-training-hall --from-task element_trial`. A selected repeated batch starts
 at its first iteration and uses its configured count; it does not resume inside
 the batch. Earlier tasks are skipped without checking whether they succeeded.
-The play-shop `skill_manual` purchase remains disabled, so it has no resume ID.
+The play-shop `skill_manual` purchase runs after `base_materials` and shares
+that suffix, so it has no independent resume ID.
 
 One failed click delivery is retried once after re-focusing the calibrated game
 window. If delivery still fails after a known phase entry, the helper uses only
@@ -606,11 +607,11 @@ visible and safe.
 ### Training Hall Play-Shop Purchase Subtask
 
 Use `base-training-hall-shop` when already on the training hall page. It opens
-玩法商店 and purchases the enabled 基地熔粉, 枪械图纸, and 基建耗材 entries at
-maximum quantity, dismisses each reward popup and closes each purchase modal,
-then closes the play shop. The 随机技能手册 entry remains disabled. The route
-uses the battlefield bottom drag and horizontal tab-strip drag before entering
-the requested tabs. Only run it after verifying the visible purchase actions
+玩法商店 and purchases 基地熔粉, 枪械图纸, 基建耗材, then the 随机技能手册
+from the 军团玩法 tab, each at maximum quantity. It dismisses each reward popup
+and closes each purchase modal, then closes the play shop. The route uses the
+battlefield bottom drag and horizontal tab-strip drag before entering the
+requested tabs. Only run it after verifying all four visible purchase actions
 are direct-cost and safe.
 
 ### Global Expedition Subtask

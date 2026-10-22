@@ -122,7 +122,7 @@ def _purchase_play_shop_item(
 
 
 def command_base_training_hall_shop(args: argparse.Namespace) -> int:
-    """玩法商店：从训练大厅进入，购买强化剂、枪械图纸和基建耗材后关闭商店。"""
+    """玩法商店：依次购买强化剂、枪械图纸、基建耗材和随机技能手册后关闭商店。"""
     from_task = getattr(args, "from_task", None)
     selection = select_task_suffix(
         LOCAL_TASK_IDS["base-training-hall-shop"],
@@ -160,9 +160,9 @@ def command_base_training_hall_shop(args: argparse.Namespace) -> int:
             perform_click(*points["play_shop_element_tab"], args.backend, bounds)
     if "base_materials" in tasks:
         _purchase_play_shop_item(args, points, "play_shop_base_material", bounds)
-    # 暂时不购买legion_tab和skill_manual
-    # perform_click(*points["play_shop_legion_tab"], args.backend, bounds)
-    # _purchase_play_shop_item(args, points, "play_shop_skill_manual", bounds)
+        # 随机技能手册紧接基建耗材购买，并复用同一最大数量购买流程。
+        perform_click(*points["play_shop_legion_tab"], args.backend, bounds)
+        _purchase_play_shop_item(args, points, "play_shop_skill_manual", bounds)
     sleep_between(0.5)
     perform_click(*points["play_shop_close"], args.backend, bounds)
     print(f"base training hall shop complete: attempted {selection.remaining} and closed shop", flush=True)
